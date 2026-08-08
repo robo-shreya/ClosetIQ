@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -18,7 +19,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,7 +30,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    closetHome()
+                    ClosetHome()
                 }
             }
         }
@@ -35,7 +38,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun closetHome() {
+private fun ClosetHome() {
     val selectedImageUri = remember {
         mutableStateOf<Uri?>(null)
     }
@@ -67,8 +70,13 @@ private fun closetHome() {
             Text("Add clothing")
         }
 
-        if (selectedImageUri.value != null) {
-            Text("Image selected!")
+        selectedImageUri.value?.let { uri ->
+            AsyncImage(
+                model = uri,
+                contentDescription = "Selected clothing",
+                modifier = Modifier.size(240.dp),
+                contentScale = ContentScale.Crop
+            )
         }
     }
 }
