@@ -1,64 +1,45 @@
 # ClosetIQ
 
-Nothing new — just what you already own. Your skin reading picks which forgotten
-garment gets its day, and VTO shows it on you.
+**You already own something that works today. This helps you find it.**
+
+Most people wear a small fraction of what they own — not because the rest is wrong, but because they forget it exists.
+
+ClosetIQ reads your skin from a single photo, then picks something from your own wardrobe that suits you *today* and that you haven't touched in months. It shows you wearing it before you commit.
+
+```mermaid
+flowchart LR
+    A["One photo"] --> B["Skin reading<br/>tone · redness · dullness"]
+    B --> C["Scores your closet<br/>colour match + how long unworn"]
+    C --> D["Surfaces one<br/>forgotten item"]
+    D --> E["Shows it on you"]
+    E --> F["You wear it"]
+    F -.-> G["Closet use goes up"]
+```
+
+## Why skin analysis?
+
+A colour that clashes on a day your skin is flushed can be the right choice a week later.
+
+Most "dead" clothes aren't wrong — they're **wrong-for-the-day**. Reading your skin each time is what lets the app give each forgotten item its moment, instead of recommending the same five favourites forever.
+
+## Built with
+
+Three PerfectCorp YouCam APIs, working as one:
+
+| API | Used for |
+|---|---|
+| **AI Skin Analysis** | today's redness, dullness, dark circles |
+| **AI Facial Color Tones** | undertone and skin type → your palette |
+| **AI Clothes Virtual Try-On** | showing the garment on you |
+
+Both skin readings come from **the same photo** — you're never asked to take a second one.
 
 ## Running it
-
-Two processes. Backend first.
 
 ```bash
 cd backend && npm install && npm start
 ```
 
-Then run the app from Android Studio on an **emulator** (it reaches the backend at
-`10.0.2.2:3000`). On a physical device, change `BACKEND_BASE_URL` in `app/build.gradle.kts`
-to your Mac's LAN IP and add that IP to `app/src/main/res/xml/network_security_config.xml`.
+Then open the project in Android Studio and run on an emulator.
 
-Check the backend is up:
-
-```bash
-curl -s http://localhost:3000/health
-```
-
-## Gemma or YouCam
-
-One line in `backend/.env`:
-
-```
-PROVIDER=gemma
-```
-
-`gemma` runs the local Ollama mock — free, no credits. `youcam` hits the real API once
-`backend/providers/youCamProvider.js` is implemented. **Nothing in the Android app changes
-either way**, and the YouCam credentials never leave the backend.
-
-## The tests are the spec
-
-```bash
-./gradlew :app:testDebugUnitTest
-```
-
-31 of these fail right now. Every failure is a `TODO()` in `app/src/main/java/com/closetiq/android/domain/`.
-Make them pass, in this order:
-
-1. `RankDormantUseCase.dormancyScore` — smallest, start here
-2. `PaletteEngine.buildPalette` + `paletteFit`
-3. `SkinStateModifier.skinDayFit` + `explain`
-4. `ScoreGarmentUseCase.invoke` — depends on all three
-5. `DominantColor.dominantLab` — only needed for photographed items
-
-Everything else is written. The seeded closet, the async task machine, the screens and
-the provider swap all work today.
-
-## Layout
-
-```
-app/src/main/java/com/closetiq/android/
-  domain/    pure Kotlin, no Android imports — the TODOs live here
-  data/      Room, Retrofit, image handling, repositories
-  ui/        Compose screens + ViewModels
-  AppContainer.kt   dependency injection, by hand
-backend/
-  providers/ gemmaMockProvider.js | youCamProvider.js
-```
+The app talks only to the local backend, never to YouCam directly, so API credentials stay off the device.
