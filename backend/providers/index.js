@@ -1,22 +1,35 @@
 const gemmaMockProvider = require("./gemmaMockProvider");
 const youCamProvider = require("./youCamProvider");
 
-function getTryOnProvider() {
-    const providerName = process.env.TRYON_PROVIDER;
+/**
+ * Both providers expose exactly:
+ *   createTask(input) -> { taskId, status }
+ *   getTask(taskId)   -> { taskId, status, result?, error? }
+ *
+ * Keeping the shapes identical is what makes the swap a one-line env change.
+ * PROVIDER is the current name; TRYON_PROVIDER is still read so an older .env works.
+ */
+function providerName() {
+    return (process.env.PROVIDER || process.env.TRYON_PROVIDER || "gemma").toLowerCase();
+}
 
-    if (providerName === "gemma") {
+function getProvider() {
+    const name = providerName();
+
+    if (name === "gemma") {
         return gemmaMockProvider;
     }
 
-    if (providerName === "youcam") {
+    if (name === "youcam") {
         return youCamProvider;
     }
 
     throw new Error(
-        `Unknown TRYON_PROVIDER: ${providerName}`
+        `Unknown PROVIDER: ${name}. Use "gemma" or "youcam".`
     );
 }
 
 module.exports = {
-    getTryOnProvider
+    getProvider,
+    providerName
 };
