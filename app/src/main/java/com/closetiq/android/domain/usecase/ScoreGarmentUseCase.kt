@@ -1,6 +1,8 @@
 package com.closetiq.android.domain.usecase
 
+import com.closetiq.android.domain.engine.PaletteEngine
 import com.closetiq.android.domain.engine.ScoringWeights
+import com.closetiq.android.domain.engine.SkinStateModifier
 import com.closetiq.android.domain.model.Garment
 import com.closetiq.android.domain.model.Palette
 import com.closetiq.android.domain.model.ScoredGarment
@@ -13,34 +15,16 @@ import com.closetiq.android.domain.model.SkinReading
  * what it returned.
  */
 class ScoreGarmentUseCase(
-    private val weights: ScoringWeights = ScoringWeights.Default
+    private val weights: ScoringWeights = ScoringWeights.Default,
+    private val rankDormant: RankDormantUseCase = RankDormantUseCase()
 ) {
 
     /**
-     * TODO(you): combine the four signals into one score.
+     * score = w1·paletteFit + w2·skinDayFit + w3·dormancy − w4·recentRepeat
      *
-     *   score = w1·paletteFit
-     *         + w2·skinDayFit
-     *         + w3·dormancy
-     *         − w4·recentRepeat
-     *
-     * Call PaletteEngine.paletteFit, SkinStateModifier.skinDayFit and
-     * RankDormantUseCase.dormancyScore to get the first three. Compute
-     * recentRepeat here: 1f if worn within the last 7 days, 0f otherwise.
-     * (A hard cutoff is fine. A smooth decay is nicer. Start hard.)
-     *
-     * Two things to be careful about:
-     *
-     *   - [reading] is nullable. The app must work with no skin data at all — that was
-     *     a deliberate product decision, not an oversight. When it is null, use the
-     *     neutral 0.5f for skinDayFit rather than skipping the term, so scores stay
-     *     comparable between sessions that have a reading and sessions that do not.
-     *
-     *   - Return the breakdown, not just the total. ScoredGarment carries every component
-     *     because the UI explains its reasoning, and because when a recommendation looks
-     *     wrong you will want to see which term caused it.
-     *
-     * See ScoreGarmentUseCaseTest for the cases this needs to satisfy.
+     * The breakdown comes back alongside the total, not just the number. The UI explains
+     * its own reasoning from these, and when a recommendation looks wrong the first
+     * question is always which term caused it.
      */
     operator fun invoke(
         garment: Garment,
@@ -48,6 +32,48 @@ class ScoreGarmentUseCase(
         reading: SkinReading?,
         now: Long
     ): ScoredGarment {
-        TODO("Combine paletteFit, skinDayFit, dormancy and recentRepeat into a ScoredGarment")
+        val paletteFit = PaletteEngine.paletteFit(garment.color, palette)
+
+        // A null reading is a supported state, not a missing one: the app has to work
+        // for someone who never takes a photo. Substituting the neutral 0.5f rather
+        // than dropping the term keeps totals comparable across both cases.
+        val skinDayFit = reading
+            ?.let { SkinStateModifier.skinDayFit(garment.color, it) }
+            ?: NEUTRAL_SKIN_FIT
+
+        val dormancy = rankDormant.dormancyScore(garment, now)
+        val recentRepeat = if (wornRecently(garment, now)) 1f else 0f
+
+        val total = weights.paletteFit * paletteFit +
+            weights.skinDayFit * skinDayFit +
+            weights.dormancy * dormancy -
+            weights.recentRepeatPenalty * recentRepeat
+
+        return ScoredGarment(
+            garment = garment,
+            total = total,
+            paletteFit = paletteFit,
+            skinDayFit = skinDayFit,
+            dormancy = dormancy,
+            recentRepeatPenalty = recentRepeat
+        )
+    }
+
+    /**
+     * A hard cutoff rather than a decay. Wearing something twice in a week is the thing
+     * being discouraged, and the day it stops mattering is genuinely abrupt — a smooth
+     * curve would imply a precision this does not have.
+     */
+    private fun wornRecently(garment: Garment, now: Long): Boolean {
+        val lastWorn = garment.lastWornAt ?: return false
+        val days = (now - lastWorn) / RankDormantUseCase.MILLIS_PER_DAY
+        return days in 0 until RECENT_REPEAT_DAYS
+    }
+
+    companion object {
+        /** What skinDayFit returns when there is no reading — see SkinStateModifier. */
+        const val NEUTRAL_SKIN_FIT = 0.5f
+
+        const val RECENT_REPEAT_DAYS = 7L
     }
 }

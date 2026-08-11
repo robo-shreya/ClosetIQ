@@ -42,18 +42,29 @@ class GetTodaysPickUseCase(
             .filter { it.garment.category != hero.garment.category }
             .take(2)
 
-        val reason = if (reading != null) {
-            SkinStateModifier.explain(hero.garment.color, reading)
-        } else {
-            "You haven't worn this in ${daysSince(hero.garment.lastWornAt, now)} days."
+        // Both halves, always. The dormancy half is the product's premise and the skin
+        // half is what makes today different from yesterday — either one alone reads as
+        // a lesser app. Skin is appended only when there is a reading, so the sentence
+        // degrades to just the premise rather than to nothing.
+        val reason = buildString {
+            append(dormancyPhrase(hero.garment, now))
+            if (reading != null) {
+                append(' ')
+                append(SkinStateModifier.explain(hero.garment.color, reading))
+            }
         }
 
         return OutfitPick(hero = hero, supporting = supporting, reason = reason)
     }
 
-    private fun daysSince(then: Long?, now: Long): Long {
-        if (then == null) return 0
-        return (now - then) / RankDormantUseCase.MILLIS_PER_DAY
+    private fun dormancyPhrase(garment: Garment, now: Long): String {
+        val lastWorn = garment.lastWornAt ?: return "You've never worn this."
+
+        return when (val days = (now - lastWorn) / RankDormantUseCase.MILLIS_PER_DAY) {
+            0L -> "You wore this today."
+            1L -> "You wore this yesterday."
+            else -> "You haven't worn this in $days days."
+        }
     }
 
     companion object {

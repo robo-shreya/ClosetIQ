@@ -89,7 +89,9 @@ class AppContainer(context: Context) {
 
     val rankDormant: RankDormantUseCase by lazy { RankDormantUseCase() }
 
-    val scoreGarment: ScoreGarmentUseCase by lazy { ScoreGarmentUseCase(scoringWeights) }
+    val scoreGarment: ScoreGarmentUseCase by lazy {
+        ScoreGarmentUseCase(scoringWeights, rankDormant)
+    }
 
     val getTodaysPick: GetTodaysPickUseCase by lazy {
         GetTodaysPickUseCase(scoreGarment = scoreGarment, rankDormant = rankDormant)
