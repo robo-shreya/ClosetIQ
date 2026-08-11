@@ -73,4 +73,36 @@ class RankDormantUseCaseTest {
 
         assertEquals(listOf("forgotten", "middling", "fresh"), ranked.map { it.id })
     }
+
+    /**
+     * Everything past 90 days scores exactly 1f, so ranking cannot rely on the score
+     * alone to order them. Without a tie-break these come back in database order, which
+     * on a seeded closet looks like no sorting happened at all.
+     */
+    @Test
+    fun `items past the saturation point are still ordered oldest first`() {
+        val ranked = useCase.rank(
+            listOf(
+                garment(id = "94d", daysSinceWorn = 94),
+                garment(id = "210d", daysSinceWorn = 210),
+                garment(id = "128d", daysSinceWorn = 128)
+            ),
+            NOW
+        )
+
+        assertEquals(listOf("210d", "128d", "94d"), ranked.map { it.id })
+    }
+
+    @Test
+    fun `a never worn item outranks one worn longer ago than it was added`() {
+        val ranked = useCase.rank(
+            listOf(
+                garment(id = "worn-210d", daysSinceWorn = 210, daysSinceAdded = 240),
+                garment(id = "never-worn", daysSinceWorn = null, daysSinceAdded = 240)
+            ),
+            NOW
+        )
+
+        assertEquals(listOf("never-worn", "worn-210d"), ranked.map { it.id })
+    }
 }

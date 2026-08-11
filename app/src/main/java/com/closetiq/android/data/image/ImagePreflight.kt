@@ -9,8 +9,8 @@ import kotlin.math.roundToInt
  * Makes an image satisfy the YouCam upload envelope *before* it is ever sent, so a
  * rejected upload is impossible rather than merely unlikely.
  *
- * From the API console:
- *   JPEG or PNG · ≤ 10 MB · min 512 × 384 px · long side ≤ 4096 px
+ * From the API console and the V2 docs:
+ *   JPEG or PNG · ≤ 10 MB · min 512 × 384 px · short side ≥ 480 px · long side ≤ 4096 px
  *
  * The long side is capped well below 4096 here — the models do not benefit from more,
  * and it keeps the base64 payload small enough to post comfortably over localhost.
@@ -19,6 +19,10 @@ object ImagePreflight {
 
     const val MIN_WIDTH = 512
     const val MIN_HEIGHT = 384
+
+    /** YouCam rejects anything narrower than this on the short edge. */
+    const val MIN_SHORT_SIDE = 480
+
     const val MAX_LONG_SIDE = 1600
     const val JPEG_QUALITY = 88
     const val MAX_BYTES = 10 * 1024 * 1024
@@ -39,11 +43,19 @@ object ImagePreflight {
         // Too big: shrink to the cap.
         if (longSide > MAX_LONG_SIDE) return MAX_LONG_SIDE.toFloat() / longSide
 
-        // Too small: grow until both minimums are met. Upscaling is lossy but a rejected
+        // Too small: grow until every minimum is met. Upscaling is lossy but a rejected
         // upload is worse, and phone cameras rarely produce anything this small anyway.
+        val shortSide = minOf(width, height)
+
         val widthScale = if (width < MIN_WIDTH) MIN_WIDTH.toFloat() / width else 1f
         val heightScale = if (height < MIN_HEIGHT) MIN_HEIGHT.toFloat() / height else 1f
-        return maxOf(widthScale, heightScale)
+        val shortScale = if (shortSide < MIN_SHORT_SIDE) {
+            MIN_SHORT_SIDE.toFloat() / shortSide
+        } else {
+            1f
+        }
+
+        return maxOf(widthScale, heightScale, shortScale)
     }
 
     fun toBase64Jpeg(bitmap: Bitmap): String {

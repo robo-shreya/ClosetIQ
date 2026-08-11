@@ -15,3 +15,8 @@
 local.properties
 backend/node_modules/
 backend/.env
+
+# Local test photos for backend/probe.js — personal images, keep them out of git
+backend/*.png
+backend/*.jpg
+backend/*.jpeg

@@ -8,28 +8,47 @@ import com.closetiq.android.domain.model.Garment
 class RankDormantUseCase {
 
     /**
-     * TODO(you): return 0f..1f for how overdue this garment is.
+     * How overdue this garment is, 0f..1f.
      *
-     *   worn today                → 0f
-     *   never worn, or worn 90+ days ago → 1f
-     *   in between                → proportional
+     *   worn today        → 0f
+     *   worn 90+ days ago → 1f
+     *   in between        → proportional
      *
-     * The simple version is `min(daysSinceWorn / 90f, 1f)`, and it is a fine place to start.
-     *
-     * One decision you have to make and should write a test for: what does a garment
-     * with lastWornAt == null mean? A never-worn item is either the most dormant thing
-     * you own or a brand-new purchase you have not had the chance to wear yet.
-     * [Garment.addedAt] is how you tell the difference. Decide which behaviour you want.
-     *
-     * See RankDormantUseCaseTest for the cases this needs to satisfy.
+     * A garment that has never been worn falls back to [Garment.addedAt]. The question
+     * that resolves is "how long since this item last had its moment" — and being added
+     * to the closet counts as one. That makes something bought yesterday score near 0
+     * (it has not had its chance yet) while something owned for 200 days and never worn
+     * scores 1 (it is the most forgotten thing you own). Both are real cases and the
+     * two of them need different answers.
      */
     fun dormancyScore(garment: Garment, now: Long): Float {
-        TODO("Return 0f..1f for how overdue this garment is")
+        val reference = garment.lastWornAt ?: garment.addedAt
+        val daysSince = (now - reference).toFloat() / MILLIS_PER_DAY
+
+        // coerceIn does two jobs: caps runaway values at 1, and floors the negative
+        // that a future timestamp would otherwise produce.
+        return (daysSince / FULLY_DORMANT_DAYS).coerceIn(0f, 1f)
     }
 
-    /** Sorts a closet by dormancy, most-forgotten first. Free once the above works. */
+    /**
+     * Sorts a closet by dormancy, most-forgotten first.
+     *
+     * The tie-break matters more than it looks. [dormancyScore] saturates at
+     * [FULLY_DORMANT_DAYS], which is right for scoring — past three months, everything
+     * is equally forgotten as far as the recommendation is concerned. But that makes
+     * every such item score exactly 1f, and a stable sort then leaves them in whatever
+     * order the database happened to return. On a seeded closet that looks like no
+     * sorting at all.
+     *
+     * So: rank by score, then break ties on the actual timestamp, oldest first.
+     * Sorting on the timestamp alone would give the same answer today, but it would
+     * silently stop tracking [dormancyScore] the moment that gains another factor.
+     */
     fun rank(garments: List<Garment>, now: Long): List<Garment> =
-        garments.sortedByDescending { dormancyScore(it, now) }
+        garments.sortedWith(
+            compareByDescending<Garment> { dormancyScore(it, now) }
+                .thenBy { it.lastWornAt ?: it.addedAt }
+        )
 
     companion object {
         const val FULLY_DORMANT_DAYS = 90
