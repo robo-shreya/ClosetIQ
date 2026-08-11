@@ -20,9 +20,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.closetiq.android.ui.theme.Nocturne
 
@@ -89,7 +95,7 @@ fun NocturneCard(
     modifier: Modifier = Modifier,
     background: Brush = Brush.verticalGradient(listOf(Nocturne.Surface, Nocturne.Surface)),
     borderColor: Color = Nocturne.Neutral800,
-    contentPadding: Int = 16,
+    contentPadding: Dp = 16.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
@@ -97,7 +103,7 @@ fun NocturneCard(
             .clip(RadiusLg)
             .background(background)
             .border(1.dp, borderColor, RadiusLg)
-            .padding(contentPadding.dp),
+            .padding(contentPadding),
         content = content
     )
 }
@@ -131,7 +137,7 @@ fun MetricBar(
                 color = Nocturne.Text
             )
         }
-        AccentBar(fraction = value / 100f, height = 4)
+        AccentBar(fraction = value / 100f, height = 4.dp)
     }
 }
 
@@ -139,13 +145,13 @@ fun MetricBar(
 @Composable
 fun AccentBar(
     fraction: Float,
-    height: Int,
+    height: Dp,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(height.dp)
+            .height(height)
             .clip(RoundedCornerShape(99.dp))
             .background(Nocturne.Neutral900)
     ) {
@@ -162,9 +168,9 @@ fun AccentBar(
 
 /** The spinner, at the one size the system uses it. */
 @Composable
-fun NocturneSpinner(modifier: Modifier = Modifier, size: Int = 16) {
+fun NocturneSpinner(modifier: Modifier = Modifier, size: Dp = 16.dp) {
     CircularProgressIndicator(
-        modifier = modifier.size(size.dp),
+        modifier = modifier.size(size),
         color = Nocturne.Accent,
         trackColor = Nocturne.Neutral700,
         strokeWidth = 2.dp
@@ -177,11 +183,24 @@ fun DashedPanel(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val stroke = with(LocalDensity.current) { 1.dp.toPx() }
+    val radius = with(LocalDensity.current) { 14.dp.toPx() }
+    val dash = with(LocalDensity.current) { floatArrayOf(8.dp.toPx(), 6.dp.toPx()) }
+
     Column(
         modifier = modifier
             .clip(RadiusLg)
             .background(Nocturne.Field)
-            .border(1.dp, Nocturne.Neutral700, RadiusLg)
+            .drawBehind {
+                drawRoundRect(
+                    color = Nocturne.Neutral700,
+                    cornerRadius = CornerRadius(radius, radius),
+                    style = Stroke(
+                        width = stroke,
+                        pathEffect = PathEffect.dashPathEffect(dash)
+                    )
+                )
+            }
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),

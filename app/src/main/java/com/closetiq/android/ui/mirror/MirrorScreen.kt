@@ -72,6 +72,8 @@ fun MirrorScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri -> uri?.let(viewModel::onPhotoPicked) }
 
+    val pick = state.pick
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -96,10 +98,10 @@ fun MirrorScreen(
             state.loading -> Box(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
                 contentAlignment = Alignment.Center
-            ) { NocturneSpinner(size = 20) }
+            ) { NocturneSpinner(size = 20.dp) }
 
-            state.pick != null -> PickSection(
-                pick = state.pick!!,
+            pick != null -> PickSection(
+                pick = pick,
                 rendering = state.rendering,
                 renderUrl = state.renderUrl,
                 renderNote = state.renderNote,

@@ -88,7 +88,7 @@ fun GarmentTile(
             }
 
             when {
-                processing -> NocturneSpinner(size = 18)
+                processing -> NocturneSpinner(size = 18.dp)
 
                 garment.imagePath != null -> Kicker(
                     text = "photo",

@@ -105,7 +105,7 @@ private fun UtilisationHeader(utilisation: Float, total: Int) {
             )
         }
 
-        AccentBar(fraction = utilisation, height = 6)
+        AccentBar(fraction = utilisation, height = 6.dp)
 
         Text(
             text = "$wornCount of $total items worn in the last 90 days",

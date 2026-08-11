@@ -66,7 +66,9 @@ fun AddItemScreen(
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        if (state.localImagePath == null) {
+        val photoPath = state.localImagePath
+
+        if (photoPath == null) {
             DashedPanel(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -86,7 +88,7 @@ fun AddItemScreen(
             }
         } else {
             AsyncImage(
-                model = File(state.localImagePath!!),
+                model = File(photoPath),
                 contentDescription = "Selected garment",
                 modifier = Modifier
                     .fillMaxWidth()
@@ -105,7 +107,7 @@ fun AddItemScreen(
             Text(
                 text = when {
                     state.importing -> "Importing…"
-                    state.localImagePath != null -> "Photo attached · replace"
+                    photoPath != null -> "Photo attached · replace"
                     else -> "Choose photo"
                 },
                 color = Nocturne.Text
