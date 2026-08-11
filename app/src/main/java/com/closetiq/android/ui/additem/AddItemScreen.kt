@@ -2,24 +2,34 @@ package com.closetiq.android.ui.additem
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -27,8 +37,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.closetiq.android.AppContainer
 import com.closetiq.android.domain.model.Category
+import com.closetiq.android.ui.components.DashedPanel
+import com.closetiq.android.ui.components.Footnote
+import com.closetiq.android.ui.components.Kicker
+import com.closetiq.android.ui.components.RadiusMd
+import com.closetiq.android.ui.theme.Nocturne
 import java.io.File
 
+private const val PHOTO_PANEL_HEIGHT_DP = 210
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AddItemScreen(
     container: AppContainer,
@@ -44,70 +62,148 @@ fun AddItemScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Text("Add an item", style = MaterialTheme.typography.headlineSmall)
-
-        // Without background removal, colour is sampled from the middle of the frame.
-        // This line is the reason it works — say it where the user will act on it.
-        Text(
-            "Fill the frame with the garment. Colour is read from the centre of the photo.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        OutlinedButton(onClick = { picker.launch("image/*") }) {
-            Text(if (state.localImagePath == null) "Choose photo" else "Change photo")
-        }
-
-        state.localImagePath?.let { path ->
+        if (state.localImagePath == null) {
+            DashedPanel(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(PHOTO_PANEL_HEIGHT_DP.dp)
+            ) {
+                Text(
+                    text = "Fill the frame with the garment",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Nocturne.Neutral400
+                )
+                Text(
+                    text = "Colour is read from the centre, and the photo is resized into " +
+                        "YouCam's envelope on import",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Nocturne.Neutral600
+                )
+            }
+        } else {
             AsyncImage(
-                model = File(path),
+                model = File(state.localImagePath!!),
                 contentDescription = "Selected garment",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(220.dp),
+                    .height(PHOTO_PANEL_HEIGHT_DP.dp)
+                    .clip(RadiusMd)
+                    .border(1.dp, Nocturne.Neutral800, RadiusMd),
                 contentScale = ContentScale.Crop
             )
         }
 
-        OutlinedTextField(
-            value = state.label,
-            onValueChange = viewModel::onLabelChange,
-            label = { Text("Name it") },
-            placeholder = { Text("Olive field jacket") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.horizontalScroll(rememberScrollState())
+        OutlinedButton(
+            onClick = { picker.launch("image/*") },
+            enabled = !state.importing,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
         ) {
-            Category.entries.forEach { category ->
-                FilterChip(
-                    selected = state.category == category,
-                    onClick = { viewModel.onCategoryChange(category) },
-                    label = { Text(category.name.lowercase()) }
-                )
+            Text(
+                text = when {
+                    state.importing -> "Importing…"
+                    state.localImagePath != null -> "Photo attached · replace"
+                    else -> "Choose photo"
+                },
+                color = Nocturne.Text
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Kicker("Name")
+            OutlinedTextField(
+                value = state.label,
+                onValueChange = viewModel::onLabelChange,
+                placeholder = {
+                    Text("Olive field jacket", color = Nocturne.Neutral600)
+                },
+                singleLine = true,
+                shape = RadiusMd,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Nocturne.Field,
+                    unfocusedContainerColor = Nocturne.Field,
+                    focusedBorderColor = Nocturne.Accent,
+                    unfocusedBorderColor = Nocturne.Neutral800,
+                    cursorColor = Nocturne.Accent
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Kicker("Category")
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Category.entries.forEach { category ->
+                    CategoryChip(
+                        label = category.name.lowercase(),
+                        selected = state.category == category,
+                        onClick = { viewModel.onCategoryChange(category) }
+                    )
+                }
             }
         }
 
         state.error?.let { message ->
             Text(
-                message,
+                text = message,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
+                color = Nocturne.Accent300
             )
         }
 
         Button(
             onClick = { viewModel.onSave(onDone) },
             enabled = state.canSave,
-            modifier = Modifier.fillMaxWidth()
+            shape = RadiusMd,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Nocturne.Accent900,
+                contentColor = Nocturne.Accent200,
+                disabledContainerColor = Nocturne.Neutral900,
+                disabledContentColor = Nocturne.Neutral600
+            ),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) {
-            Text(if (state.saving) "Saving…" else "Add to closet")
+            Text(if (state.saving) "Saving…" else "Save to closet")
         }
+
+        Footnote(
+            "Inserts immediately as PROCESSING, so the tile appears before any image " +
+                "work finishes."
+        )
+    }
+}
+
+/** A pill that takes the accent when chosen and a hairline outline when not. */
+@Composable
+private fun CategoryChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .heightIn(min = 36.dp)
+            .clip(RoundedCornerShape(99.dp))
+            .background(if (selected) Nocturne.Accent900 else Nocturne.Bg)
+            .border(
+                width = 1.dp,
+                color = if (selected) Nocturne.Accent else Nocturne.Neutral800,
+                shape = RoundedCornerShape(99.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 13.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) Nocturne.Accent200 else Nocturne.Neutral400
+        )
     }
 }

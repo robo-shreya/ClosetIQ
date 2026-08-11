@@ -14,11 +14,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-data class ClosetUiState(
-    val garments: List<Garment> = emptyList(),
-    val utilisation: Float = 0f
-)
-
 class ClosetViewModel(
     private val wardrobe: WardrobeRepository
 ) : ViewModel() {
