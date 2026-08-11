@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.ClosetIQ" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+      Nocturne is a dark theme, so the window ground matches it. Without this the
+      status bar and the pre-Compose window flash light before the first frame.
+    -->
+    <style name="Theme.ClosetIQ" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/nocturne_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
 </resources>
