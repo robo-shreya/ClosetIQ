@@ -97,6 +97,27 @@ data class SkinReading(
     val selfiePath: String?
 ) {
     fun isFreshAt(now: Long): Boolean = now < staleAfter
+
+    companion object {
+        /**
+         * Stands in when no photo has ever been taken.
+         *
+         * Colour still matters without a reading — it is only *today's* skin that is
+         * unknown — so this keeps palette scoring meaningful rather than switching it
+         * off. Every concern is zero, which SkinStateModifier reads as "no opinion".
+         */
+        val NEUTRAL = SkinReading(
+            id = "neutral-baseline",
+            capturedAt = 0L,
+            undertone = Undertone.NEUTRAL,
+            fitzpatrick = 3,
+            redness = 0f,
+            dullness = 0f,
+            darkCircles = 0f,
+            staleAfter = 0L,
+            selfiePath = null
+        )
+    }
 }
 
 /**

@@ -28,7 +28,7 @@ class GetTodaysPickUseCase(
 
         // With no reading we still need a palette to score against. A neutral reading
         // gives the baseline behaviour: colour still matters, today's skin just doesn't.
-        val palette = PaletteEngine.buildPalette(reading ?: NEUTRAL_BASELINE)
+        val palette = PaletteEngine.buildPalette(reading ?: SkinReading.NEUTRAL)
 
         val scored = active
             .map { scoreGarment(it, palette, reading, now) }
@@ -67,18 +67,4 @@ class GetTodaysPickUseCase(
         }
     }
 
-    companion object {
-        /** Used only to keep colour scoring meaningful when no selfie has ever been taken. */
-        private val NEUTRAL_BASELINE = SkinReading(
-            id = "baseline",
-            capturedAt = 0L,
-            undertone = com.closetiq.android.domain.model.Undertone.NEUTRAL,
-            fitzpatrick = 3,
-            redness = 0f,
-            dullness = 0f,
-            darkCircles = 0f,
-            staleAfter = 0L,
-            selfiePath = null
-        )
-    }
 }

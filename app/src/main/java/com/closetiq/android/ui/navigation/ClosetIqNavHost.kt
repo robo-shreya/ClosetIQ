@@ -37,10 +37,10 @@ sealed class Screen(
     data object Closet : Screen("closet", "Closet", "Everything you own", "Closet")
     data object Dormant : Screen("dormant", "Dormant", "The forgotten ones", "Dormant")
     data object AddItem : Screen("add", "Add", "Closet", "Add item")
-    data object BuyCheck : Screen("buy-check", "Buy check", "Post-hackathon", "Buy check")
+    data object BuyCheck : Screen("buy-check", "Worth it?", "Before you buy", "Worth it?")
 
     companion object {
-        val bottomTabs = listOf(Mirror, Closet, Dormant)
+        val bottomTabs = listOf(Mirror, Closet, Dormant, BuyCheck)
 
         private val all = listOf(Mirror, Closet, Dormant, AddItem, BuyCheck)
 
@@ -112,7 +112,7 @@ fun ClosetIqNavHost(container: AppContainer) {
                     )
                 }
                 composable(Screen.BuyCheck.route) {
-                    BuyCheckScreen(onBack = { navController.popBackStack() })
+                    BuyCheckScreen(container = container)
                 }
             }
         }

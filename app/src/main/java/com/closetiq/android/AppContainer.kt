@@ -15,6 +15,7 @@ import com.closetiq.android.domain.engine.ScoringWeights
 import com.closetiq.android.domain.repository.SkinRepository
 import com.closetiq.android.domain.repository.TryOnRepository
 import com.closetiq.android.domain.repository.WardrobeRepository
+import com.closetiq.android.domain.usecase.CheckDuplicateUseCase
 import com.closetiq.android.domain.usecase.GetTodaysPickUseCase
 import com.closetiq.android.domain.usecase.LogWearUseCase
 import com.closetiq.android.domain.usecase.RankDormantUseCase
@@ -46,7 +47,8 @@ class AppContainer(context: Context) {
 
     val imageStore: ImageStore by lazy { ImageStore(appContext) }
 
-    private val colorExtractor: ColorExtractor by lazy { ColorExtractor(imageStore) }
+    /** Public because the buy check extracts a colour without ever saving a garment. */
+    val colorExtractor: ColorExtractor by lazy { ColorExtractor(imageStore) }
 
     private val api by lazy { NetworkModule.buildApi() }
 
@@ -98,4 +100,6 @@ class AppContainer(context: Context) {
     }
 
     val logWear: LogWearUseCase by lazy { LogWearUseCase(wardrobeRepository) }
+
+    val checkDuplicate: CheckDuplicateUseCase by lazy { CheckDuplicateUseCase(rankDormant) }
 }

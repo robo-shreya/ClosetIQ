@@ -65,4 +65,7 @@ object TestFixtures {
     val BLACK = LabColor(12f, 0f, 0f)
     val WHITE = LabColor(95f, 0f, 0f)
     val EMERALD = LabColor(46f, -32f, 12f)
+
+    /** Strongly warm — the reference for something a cool palette should reject. */
+    val MUSTARD = LabColor(70f, 8f, 52f)
 }

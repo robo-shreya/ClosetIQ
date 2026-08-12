@@ -1,50 +1,284 @@
 package com.closetiq.android.ui.buycheck
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.closetiq.android.AppContainer
+import com.closetiq.android.domain.model.Garment
+import com.closetiq.android.domain.usecase.CheckDuplicateUseCase.BuyAdvice
+import com.closetiq.android.domain.usecase.CheckDuplicateUseCase.Verdict
+import com.closetiq.android.domain.usecase.RankDormantUseCase
+import com.closetiq.android.ui.components.AccentBar
+import com.closetiq.android.ui.components.CategoryPicker
 import com.closetiq.android.ui.components.DashedPanel
+import com.closetiq.android.ui.components.Footnote
+import com.closetiq.android.ui.components.GarmentTile
+import com.closetiq.android.ui.components.Kicker
+import com.closetiq.android.ui.components.NocturneCard
+import com.closetiq.android.ui.components.RadiusMd
 import com.closetiq.android.ui.theme.Nocturne
+import java.io.File
+import kotlin.math.roundToInt
+
+private const val PHOTO_PANEL_HEIGHT_DP = 210
+
+/** Past this, a match is something forgotten rather than something in rotation. */
+private const val DORMANT_DAYS = 60
 
 /**
- * The "don't buy" check — cut from the 8-day scope, kept as a stub because it is the
- * strongest sustainability feature in the design and the first thing to build afterwards.
+ * The buy check.
  *
- * Registered as a route but nothing navigates to it, so it cannot accidentally appear
- * half-finished in the demo video.
+ * Every other screen helps you wear what you own. This is the only one that argues
+ * against acquiring more, which is why the discouraging verdict is the one that takes
+ * the accent — the app should be loudest when it is telling you to stop.
  */
 @Composable
-fun BuyCheckScreen(onBack: () -> Unit) {
+fun BuyCheckScreen(
+    container: AppContainer,
+    viewModel: BuyCheckViewModel = viewModel(factory = BuyCheckViewModel.factory(container))
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    val picker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri -> uri?.let(viewModel::onPhotoPicked) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        DashedPanel(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = "Should you buy it?",
-                style = MaterialTheme.typography.titleMedium,
-                color = Nocturne.Neutral300
-            )
-            Text(
-                text = "Point it at something you are about to buy and it answers two " +
-                    "questions: does this suit you, and do you already own it?",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Nocturne.Neutral600
+        val photoPath = state.photoPath
+
+        if (photoPath == null) {
+            DashedPanel(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(PHOTO_PANEL_HEIGHT_DP.dp)
+            ) {
+                Text(
+                    text = "Photograph the thing you're about to buy",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Nocturne.Neutral400
+                )
+                Text(
+                    text = "Nothing is saved to your closet — this only compares.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Nocturne.Neutral600
+                )
+            }
+        } else {
+            AsyncImage(
+                model = File(photoPath),
+                contentDescription = "The item you're considering",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(PHOTO_PANEL_HEIGHT_DP.dp)
+                    .clip(RadiusMd)
+                    .border(1.dp, Nocturne.Neutral800, RadiusMd),
+                contentScale = ContentScale.Crop
             )
         }
 
-        OutlinedButton(onClick = onBack) {
-            Text("Back", color = Nocturne.Text)
+        OutlinedButton(
+            onClick = { picker.launch("image/*") },
+            enabled = !state.importing,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+        ) {
+            Text(
+                text = when {
+                    state.importing -> "Reading the colour…"
+                    photoPath != null -> "Photo attached · replace"
+                    else -> "Choose photo"
+                },
+                color = Nocturne.Text
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Kicker("What is it?")
+            CategoryPicker(
+                selected = state.category,
+                onSelect = viewModel::onCategoryChange
+            )
+        }
+
+        state.error?.let { message ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Nocturne.Accent300
+                )
+                TextButton(onClick = viewModel::dismissError) {
+                    Text("Dismiss", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+
+        Button(
+            onClick = viewModel::onCheck,
+            enabled = state.canCheck,
+            shape = RadiusMd,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Nocturne.Accent900,
+                contentColor = Nocturne.Accent200,
+                disabledContainerColor = Nocturne.Neutral900,
+                disabledContentColor = Nocturne.Neutral600
+            ),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        ) {
+            Text(if (state.checking) "Checking…" else "Is it worth it?")
+        }
+
+        state.verdict?.let { verdict ->
+            VerdictCard(verdict)
+            MatchGrid(verdict.matches)
+        }
+
+        if (state.verdict == null) {
+            Footnote(
+                "Compares against the colours already in your closet. No API call, " +
+                    "no photo leaves the device."
+            )
         }
     }
 }
+
+@Composable
+private fun VerdictCard(verdict: Verdict) {
+    val discouraging = verdict.advice == BuyAdvice.ALREADY_OWN
+
+    NocturneCard(
+        modifier = Modifier.fillMaxWidth(),
+        background = Brush.verticalGradient(
+            if (discouraging) {
+                listOf(Nocturne.Accent900, Nocturne.SkinCardBottom)
+            } else {
+                listOf(Nocturne.Surface, Nocturne.Surface)
+            }
+        ),
+        borderColor = if (discouraging) Nocturne.Accent700 else Nocturne.Neutral800
+    ) {
+        Kicker(
+            text = when (verdict.advice) {
+                BuyAdvice.BUY -> "Go ahead"
+                BuyAdvice.THINK_TWICE -> "Think twice"
+                BuyAdvice.ALREADY_OWN -> "You own this"
+            },
+            color = if (discouraging) Nocturne.Accent300 else Nocturne.Neutral500,
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+
+        Text(
+            text = verdict.headline,
+            style = MaterialTheme.typography.titleMedium,
+            color = Nocturne.Text
+        )
+
+        verdict.detail?.let { detail ->
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (discouraging) Nocturne.Accent200 else Nocturne.Neutral400,
+                modifier = Modifier.padding(top = 6.dp)
+            )
+        }
+
+        Column(
+            modifier = Modifier.padding(top = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Suits your colouring",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Nocturne.Neutral400
+                )
+                Text(
+                    text = "${(verdict.paletteFit * 100).roundToInt()}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Nocturne.Text
+                )
+            }
+            AccentBar(fraction = verdict.paletteFit, height = 4.dp)
+        }
+    }
+}
+
+@Composable
+private fun MatchGrid(matches: List<Garment>) {
+    if (matches.isEmpty()) return
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Kicker("Already in your closet")
+
+        // A plain Column of Rows rather than a LazyVerticalGrid: this sits inside a
+        // scrolling Column, and nesting a lazy grid in one is not allowed.
+        matches.chunked(3).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                row.forEach { garment ->
+                    GarmentTile(
+                        garment = garment,
+                        subtitle = garment.lastWornLabel(),
+                        subtitleColor = if (garment.isForgotten()) {
+                            Nocturne.Accent300
+                        } else {
+                            Nocturne.Neutral600
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                // Keeps a short final row aligned with the columns above it.
+                repeat(3 - row.size) {
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+private fun Garment.daysSinceWorn(): Long? = lastWornAt?.let {
+    (System.currentTimeMillis() - it) / RankDormantUseCase.MILLIS_PER_DAY
+}
+
+private fun Garment.lastWornLabel(): String =
+    daysSinceWorn()?.let { "$it days ago" } ?: "never worn"
+
+private fun Garment.isForgotten(): Boolean = (daysSinceWorn() ?: Long.MAX_VALUE) > DORMANT_DAYS
