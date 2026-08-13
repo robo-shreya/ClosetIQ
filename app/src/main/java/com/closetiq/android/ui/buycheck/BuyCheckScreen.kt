@@ -33,20 +33,20 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.closetiq.android.AppContainer
 import com.closetiq.android.domain.model.Garment
+import com.closetiq.android.domain.usecase.CheckDuplicateUseCase
 import com.closetiq.android.domain.usecase.CheckDuplicateUseCase.BuyAdvice
 import com.closetiq.android.domain.usecase.CheckDuplicateUseCase.Verdict
 import com.closetiq.android.domain.usecase.RankDormantUseCase
-import com.closetiq.android.ui.components.AccentBar
 import com.closetiq.android.ui.components.CategoryPicker
 import com.closetiq.android.ui.components.DashedPanel
 import com.closetiq.android.ui.components.Footnote
 import com.closetiq.android.ui.components.GarmentTile
 import com.closetiq.android.ui.components.Kicker
 import com.closetiq.android.ui.components.NocturneCard
+import com.closetiq.android.ui.components.PipScale
 import com.closetiq.android.ui.components.RadiusMd
 import com.closetiq.android.ui.theme.Nocturne
 import java.io.File
-import kotlin.math.roundToInt
 
 private const val PHOTO_PANEL_HEIGHT_DP = 210
 
@@ -180,7 +180,7 @@ fun BuyCheckScreen(
 
 @Composable
 private fun VerdictCard(verdict: Verdict) {
-    val discouraging = verdict.advice == BuyAdvice.ALREADY_OWN
+    val discouraging = verdict.discouraging
 
     NocturneCard(
         modifier = Modifier.fillMaxWidth(),
@@ -219,26 +219,87 @@ private fun VerdictCard(verdict: Verdict) {
         }
 
         Column(
-            modifier = Modifier.padding(top = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.padding(top = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Suits your colouring",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Nocturne.Neutral400
-                )
-                Text(
-                    text = "${(verdict.paletteFit * 100).roundToInt()}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Nocturne.Text
-                )
+            Kicker("What that's based on", color = Nocturne.Neutral600)
+
+            // The three things the verdict is actually computed from. A single opaque
+            // number told nobody what it measured or what it was out of.
+            Factor(
+                label = "Suits your colouring",
+                detail = "from your undertone and skin type",
+                score = verdict.paletteOutOfFive,
+                alarming = verdict.paletteFit < 0.5f
+            )
+            Factor(
+                label = "Unlike anything you own",
+                detail = if (verdict.matches.isEmpty()) {
+                    "nothing this colour in this category"
+                } else {
+                    "${verdict.matches.size} similar already in your closet"
+                },
+                score = (CheckDuplicateUseCase.SCALE - verdict.matches.size).coerceAtLeast(0),
+                alarming = verdict.matches.isNotEmpty()
+            )
+            // Dormancy is a count, not a score out of five. Forcing it onto the same
+            // scale produced a low number beside a reassuring sentence, which read as a
+            // contradiction. It carries more weight as a plain flagged fact anyway.
+            if (verdict.dormantMatches > 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Of those, unworn for months",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Nocturne.Accent200
+                    )
+                    Text(
+                        text = "${verdict.dormantMatches}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Nocturne.Accent200
+                    )
+                }
             }
-            AccentBar(fraction = verdict.paletteFit, height = 4.dp)
         }
+    }
+}
+
+/** One decision input: what it measures, how it scored, and why. */
+@Composable
+private fun Factor(
+    label: String,
+    detail: String,
+    score: Int,
+    alarming: Boolean
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = Nocturne.Neutral300
+            )
+            Text(
+                text = "$score/${CheckDuplicateUseCase.SCALE}",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (alarming) Nocturne.Accent300 else Nocturne.Text
+            )
+        }
+        PipScale(
+            filled = score,
+            total = CheckDuplicateUseCase.SCALE,
+            filledColor = if (alarming) Nocturne.Accent300 else Nocturne.Accent
+        )
+        Text(
+            text = detail,
+            style = MaterialTheme.typography.bodySmall,
+            color = Nocturne.Neutral600
+        )
     }
 }
 

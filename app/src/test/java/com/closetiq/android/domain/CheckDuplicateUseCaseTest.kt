@@ -182,6 +182,34 @@ class CheckDuplicateUseCaseTest {
         assertEquals(0, verdict.dormantMatches)
     }
 
+    // ---- what the card shows ----
+
+    @Test
+    fun `palette fit is reported on a five point scale`() {
+        val poor = check(emptyList(), color = MUSTARD)
+        val good = check(emptyList(), color = NAVY)
+
+        assertTrue("a bad fit should read near zero, was ${poor.paletteOutOfFive}",
+            poor.paletteOutOfFive <= 1)
+        assertTrue("a good fit should read near five, was ${good.paletteOutOfFive}",
+            good.paletteOutOfFive >= 4)
+    }
+
+    @Test
+    fun `the card is told to raise its voice when the verdict argues against buying`() {
+        assertTrue("a poor palette should be flagged", check(emptyList(), color = MUSTARD).discouraging)
+        assertTrue(
+            "owning two already should be flagged",
+            check(
+                listOf(
+                    garment(id = "a", color = NAVY, category = Category.TOP),
+                    garment(id = "b", color = NAVY, category = Category.TOP)
+                )
+            ).discouraging
+        )
+        assertTrue("a clean buy should not be", !check(emptyList(), color = NAVY).discouraging)
+    }
+
     @Test
     fun `every verdict carries a headline`() {
         val closets = listOf(

@@ -6,6 +6,7 @@ import com.closetiq.android.domain.model.Category
 import com.closetiq.android.domain.model.Garment
 import com.closetiq.android.domain.model.LabColor
 import com.closetiq.android.domain.model.Palette
+import kotlin.math.roundToInt
 
 /**
  * The buy check: point the app at something you are about to buy and it answers two
@@ -35,7 +36,20 @@ class CheckDuplicateUseCase(
         val paletteFit: Float,
         val headline: String,
         val detail: String?
-    )
+    ) {
+        /**
+         * [paletteFit] on a five-point scale, for display.
+         *
+         * A bare "1" out of an unstated range tells nobody anything — and read next to a
+         * verdict it looked like a contradiction. Five points is coarse enough to be
+         * honest about how rough the underlying measure is.
+         */
+        val paletteOutOfFive: Int get() = (paletteFit * SCALE).roundToInt().coerceIn(0, SCALE)
+
+        /** True when the verdict argues against buying, so the UI can raise its voice. */
+        val discouraging: Boolean
+            get() = advice == BuyAdvice.ALREADY_OWN || paletteFit < WEAK_PALETTE_FIT
+    }
 
     operator fun invoke(
         closet: List<Garment>,
@@ -144,5 +158,8 @@ class CheckDuplicateUseCase(
 
         const val WEAK_PALETTE_FIT = 0.5f
         const val STRONG_PALETTE_FIT = 0.75f
+
+        /** Points on the displayed scale. */
+        const val SCALE = 5
     }
 }
