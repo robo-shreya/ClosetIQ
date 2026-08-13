@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
  * demonstrated with a wardrobe the user built five minutes ago — "you forgot about this"
  * needs a closet with a past, and there is no way to film that otherwise.
  *
- * Four of the most dormant items carry a real photograph from assets/seed; the rest
+ * Six of the most dormant items carry a real photograph from assets/seed; the rest
  * render as colour swatches. That split is deliberate: colour is what the scoring uses,
  * so a swatch fakes nothing that matters — but virtual try-on needs an actual picture,
  * so the items most likely to be surfaced as today's pick are the ones that have one.
@@ -60,14 +60,14 @@ object SeedCloset {
         // --- dormant: the rescue queue ---
         Seed("Olive field jacket", Category.OUTERWEAR, 42f, -8f, 22f, 94, 4),
         Seed("Rust corduroy shirt", Category.TOP, 45f, 24f, 30f, 112, 3),
-        Seed("Blue striped shirt", Category.TOP, 74f, 2f, -25f, 128, 2, "seed/blue-shirt.jpg"),
+        Seed("Black crew tee", Category.TOP, 6f, -1f, -3f, 128, 2, "seed/black-tshirt.jpg"),
         Seed("Mustard cardigan", Category.OUTERWEAR, 70f, 8f, 52f, 141, 2),
-        Seed("Burgundy trousers", Category.BOTTOM, 30f, 26f, 8f, 156, 3),
-        Seed("Mustard graphic tee", Category.TOP, 56f, 18f, 50f, 173, 1, "seed/mustard-tee.jpg"),
-        Seed("Dark denim straight-leg", Category.BOTTOM, 25f, 1f, -22f, 189, 2, "seed/dark-denim.jpg"),
-        Seed("Rust crew sweatshirt", Category.TOP, 24f, 19f, 16f, 204, 1, "seed/rust-crew.jpg"),
+        Seed("Green trousers", Category.BOTTOM, 33f, -14f, 9f, 156, 3, "seed/green-pants.jpg"),
+        Seed("Blue tee", Category.TOP, 33f, -1f, -34f, 173, 1, "seed/blue-tshirt.jpg"),
+        Seed("Khaki chinos", Category.BOTTOM, 52f, 2f, 21f, 189, 2, "seed/khaki-pants.jpg"),
+        Seed("Green tee", Category.TOP, 37f, -37f, 20f, 204, 1, "seed/green-tshirt.jpg"),
         Seed("Tan suede loafers", Category.SHOES, 58f, 9f, 24f, 210, 2),
-        Seed("Plum overshirt", Category.OUTERWEAR, 36f, 22f, -10f, null, 0)
+        Seed("Beige blazer", Category.OUTERWEAR, 75f, 6f, 3f, null, 0, "seed/beige-blazer.jpg")
     )
 
     /** Asset file for a seeded id, or null when that item is a plain colour swatch. */

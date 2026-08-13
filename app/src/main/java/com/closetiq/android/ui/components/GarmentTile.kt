@@ -51,9 +51,10 @@ private const val TILE_HEIGHT_DP = 92
 /**
  * One item in a closet grid.
  *
- * Seeded garments have no photo and render as a colour swatch; photographed ones render
- * the photo and carry a small "photo" tag, so the two are always distinguishable at a
- * glance. Colour is what the scoring engine consumes either way.
+ * A garment with a photo renders it; one without renders its colour as a swatch.
+ * Colour is what the scoring engine consumes either way, so a swatch is a real
+ * representation rather than a placeholder — but only a photographed item can go
+ * through virtual try-on.
  */
 @Composable
 fun GarmentTile(
@@ -87,16 +88,10 @@ fun GarmentTile(
                 )
             }
 
-            when {
-                processing -> NocturneSpinner(size = 18.dp)
-
-                garment.imagePath != null -> Kicker(
-                    text = "photo",
-                    color = Nocturne.Neutral300,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 7.dp, bottom = 6.dp)
-                )
+            // No "photo" badge: it sat unreadably over light product shots, and a
+            // photograph is self-evidently not a swatch.
+            if (processing) {
+                NocturneSpinner(size = 18.dp)
             }
         }
 

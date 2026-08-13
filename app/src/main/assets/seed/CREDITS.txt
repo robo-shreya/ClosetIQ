@@ -1,12 +1,15 @@
-Seed garment photos are from Unsplash (https://unsplash.com).
+Seed garment photos.
 
-The Unsplash License permits free use, including commercially, without
-permission or attribution. Credit is given here anyway as good practice.
+These are the project owner's own downloaded product shots, used to populate the
+demo closet. They stand in for a real wardrobe: the app needs an actual picture
+of a garment for virtual try-on, which a flat colour swatch cannot provide.
 
-  rust-crew.jpg    unsplash.com/photos/1607160199580-1b0c9b736b66
-  mustard-tee.jpg  unsplash.com/photos/1696086152504-4843b2106ab4
-  blue-shirt.jpg   unsplash.com/photos/1623658580851-3b25bf83b4ea
-  dark-denim.jpg   unsplash.com/photos/1714143136372-ddaf8b606da7
+Selection was not arbitrary. Each was run through the same centre-crop and
+colour-bucketing that DominantColor applies, and only photos whose extracted
+colour matched the garment were kept. Rejected examples and why:
 
-These stand in for a real wardrobe in the seeded demo closet. Replacing them
-with your own photographs is a drop-in swap: same filenames, same folder.
+  navy chinos    a model against a bright orange wall — the wall dominates the
+                 crop and, being chromatic, survives the background filter, so
+                 the extractor returned orange
+  white tshirt   white on white; almost nothing survives the filter
+  beige pants    washed out, too pale to read as a colour
