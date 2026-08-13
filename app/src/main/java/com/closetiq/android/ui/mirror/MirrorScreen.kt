@@ -102,6 +102,7 @@ fun MirrorScreen(
 
             pick != null -> PickSection(
                 pick = pick,
+                canRender = state.heroCanRender,
                 rendering = state.rendering,
                 renderUrl = state.renderUrl,
                 renderNote = state.renderNote,
@@ -219,6 +220,7 @@ private fun SkinCard(
 @Composable
 private fun PickSection(
     pick: OutfitPick,
+    canRender: Boolean,
     rendering: Boolean,
     renderUrl: String?,
     renderNote: String?,
@@ -271,6 +273,15 @@ private fun PickSection(
 
         // The Gemma mock returns commentary instead of an image, so showing it proves the
         // whole path works end to end before YouCam is switched on.
+        if (!canRender) {
+            Text(
+                text = "This one is a colour swatch, so there's nothing to render. " +
+                    "Photograph it to try it on.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Nocturne.Neutral600
+            )
+        }
+
         renderNote?.let { note ->
             Text(
                 text = note,
@@ -282,10 +293,10 @@ private fun PickSection(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(
                 onClick = onRender,
-                enabled = !rendering,
+                enabled = canRender && !rendering,
                 modifier = Modifier.weight(1f).height(46.dp)
             ) {
-                Text("See it on me")
+                Text(if (rendering) "Rendering…" else "See it on me")
             }
             OutlinedButton(
                 onClick = onWoreIt,

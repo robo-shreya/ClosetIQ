@@ -114,8 +114,18 @@ class WardrobeRepositoryImpl(
         Log.i(TAG, "seeding demo closet")
 
         val now = System.currentTimeMillis()
+        val seeded = SeedCloset.entities(now)
+
+        // Copy the bundled photos into app storage first. An asset has no file path, and
+        // both the colour extractor and the try-on upload need one — so without this a
+        // seeded garment could never be rendered.
+        val withPhotos = seeded.map { garment ->
+            val asset = SeedCloset.assetFor(garment.id) ?: return@map garment
+            garment.copy(imagePath = imageStore.importFromAsset(asset))
+        }
+
         db.withTransaction {
-            garments.insertAll(SeedCloset.entities(now))
+            garments.insertAll(withPhotos)
             wearLog.insertAll(SeedCloset.wearLog(now))
         }
     }

@@ -1,0 +1,12 @@
+Seed garment photos are from Unsplash (https://unsplash.com).
+
+The Unsplash License permits free use, including commercially, without
+permission or attribution. Credit is given here anyway as good practice.
+
+  rust-crew.jpg    unsplash.com/photos/1607160199580-1b0c9b736b66
+  mustard-tee.jpg  unsplash.com/photos/1696086152504-4843b2106ab4
+  blue-shirt.jpg   unsplash.com/photos/1623658580851-3b25bf83b4ea
+  dark-denim.jpg   unsplash.com/photos/1714143136372-ddaf8b606da7
+
+These stand in for a real wardrobe in the seeded demo closet. Replacing them
+with your own photographs is a drop-in swap: same filenames, same folder.

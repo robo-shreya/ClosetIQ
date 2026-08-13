@@ -46,5 +46,21 @@ class ImageStore(private val context: Context) {
         ImagePreflight.toBase64Jpeg(bitmap)
     }
 
+    /**
+     * Copies a bundled asset into app storage and returns its path.
+     *
+     * The seeded closet ships its photos as assets, but an asset has no file path, and
+     * both the colour extractor and the try-on upload need one. Copying on first launch
+     * makes a seeded garment indistinguishable from one the user photographed.
+     */
+    suspend fun importFromAsset(assetName: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val bitmap = context.assets.open(assetName).use { input ->
+                requireNotNull(BitmapFactory.decodeStream(input)) { "Could not decode $assetName" }
+            }
+            save(ImagePreflight.prepare(bitmap), name = assetName.substringAfterLast('/'))
+        }.getOrNull()
+    }
+
     fun delete(path: String): Boolean = File(path).takeIf { it.exists() }?.delete() ?: false
 }

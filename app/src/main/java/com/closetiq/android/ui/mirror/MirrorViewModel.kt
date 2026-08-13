@@ -30,7 +30,14 @@ data class MirrorUiState(
     val rendering: Boolean = false,
     val analysing: Boolean = false,
     val error: String? = null
-)
+) {
+    /**
+     * Virtual try-on needs a picture of the garment, and seeded swatches have none.
+     * Surfaced as state so the button can explain itself instead of failing on tap.
+     */
+    val heroCanRender: Boolean
+        get() = pick?.hero?.garment?.let { it.cutoutPath ?: it.imagePath } != null
+}
 
 class MirrorViewModel(
     private val wardrobe: WardrobeRepository,

@@ -11,9 +11,13 @@ import java.util.concurrent.TimeUnit
  * demonstrated with a wardrobe the user built five minutes ago — "you forgot about this"
  * needs a closet with a past, and there is no way to film that otherwise.
  *
- * Items have no photo (imagePath = null) and render as a colour swatch. Colour is what
- * the scoring actually uses, so nothing is faked that matters, and there are no image
- * assets to manage.
+ * Four of the most dormant items carry a real photograph from assets/seed; the rest
+ * render as colour swatches. That split is deliberate: colour is what the scoring uses,
+ * so a swatch fakes nothing that matters — but virtual try-on needs an actual picture,
+ * so the items most likely to be surfaced as today's pick are the ones that have one.
+ *
+ * Their Lab values were measured from the photos using the same bucketing
+ * DominantColor applies, so the stored colour and the picture on screen agree.
  *
  * The wear history is deliberately spread across three groups:
  *   - in rotation      (worn 1-6 days ago)   → these should NOT be recommended
@@ -29,7 +33,12 @@ object SeedCloset {
         val a: Float,
         val b: Float,
         val daysSinceWorn: Int?,
-        val wearCount: Int
+        val wearCount: Int,
+        /**
+         * File in assets/seed. Items with one render as a photograph and can go through
+         * virtual try-on; the rest render as colour swatches and cannot.
+         */
+        val asset: String? = null
     )
 
     private val SEEDS = listOf(
@@ -51,15 +60,19 @@ object SeedCloset {
         // --- dormant: the rescue queue ---
         Seed("Olive field jacket", Category.OUTERWEAR, 42f, -8f, 22f, 94, 4),
         Seed("Rust corduroy shirt", Category.TOP, 45f, 24f, 30f, 112, 3),
-        Seed("Emerald knit polo", Category.TOP, 46f, -32f, 12f, 128, 2),
+        Seed("Blue striped shirt", Category.TOP, 74f, 2f, -25f, 128, 2, "seed/blue-shirt.jpg"),
         Seed("Mustard cardigan", Category.OUTERWEAR, 70f, 8f, 52f, 141, 2),
         Seed("Burgundy trousers", Category.BOTTOM, 30f, 26f, 8f, 156, 3),
-        Seed("Teal short-sleeve", Category.TOP, 52f, -22f, -6f, 173, 1),
-        Seed("Cream wide-leg", Category.BOTTOM, 84f, 1f, 11f, 189, 2),
-        Seed("Coral linen shirt", Category.TOP, 66f, 32f, 24f, 204, 1),
+        Seed("Mustard graphic tee", Category.TOP, 56f, 18f, 50f, 173, 1, "seed/mustard-tee.jpg"),
+        Seed("Dark denim straight-leg", Category.BOTTOM, 25f, 1f, -22f, 189, 2, "seed/dark-denim.jpg"),
+        Seed("Rust crew sweatshirt", Category.TOP, 24f, 19f, 16f, 204, 1, "seed/rust-crew.jpg"),
         Seed("Tan suede loafers", Category.SHOES, 58f, 9f, 24f, 210, 2),
         Seed("Plum overshirt", Category.OUTERWEAR, 36f, 22f, -10f, null, 0)
     )
+
+    /** Asset file for a seeded id, or null when that item is a plain colour swatch. */
+    fun assetFor(id: String): String? =
+        id.removePrefix("seed-").toIntOrNull()?.let { SEEDS.getOrNull(it)?.asset }
 
     fun entities(now: Long = System.currentTimeMillis()): List<GarmentEntity> =
         SEEDS.mapIndexed { index, seed ->
@@ -69,7 +82,7 @@ object SeedCloset {
                 id = "seed-%02d".format(index),
                 label = seed.label,
                 category = seed.category.name,
-                imagePath = null,
+                imagePath = null, // filled in from [Seed.asset] when the closet is seeded
                 cutoutPath = null,
                 labL = seed.l,
                 labA = seed.a,
