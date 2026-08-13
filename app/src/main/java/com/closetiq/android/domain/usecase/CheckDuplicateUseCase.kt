@@ -79,8 +79,14 @@ class CheckDuplicateUseCase(
 
         return when (advice) {
             BuyAdvice.ALREADY_OWN -> "You already own $matchCount $noun this colour."
+            // Not "it fights your colouring": one letter away from "fits", which means the
+            // opposite, and at this size the two are indistinguishable.
             BuyAdvice.THINK_TWICE ->
-                if (matchCount > 0) "You own one of these already." else "It fights your colouring."
+                if (matchCount > 0) {
+                    "You own one of these already."
+                } else {
+                    "This colour works against you."
+                }
             BuyAdvice.BUY -> "Nothing like it in your closet."
         }
     }
