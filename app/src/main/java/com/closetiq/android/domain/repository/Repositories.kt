@@ -42,6 +42,21 @@ interface SkinRepository {
     suspend fun captureReading(selfiePath: String): Result<SkinReading>
 }
 
+/**
+ * The person, as opposed to the wardrobe.
+ *
+ * One photo is attached once and reused as the person image for every try-on, so the
+ * user is never asked for it again mid-flow. Replacing it is a deliberate act.
+ */
+interface ProfileRepository {
+    fun observePersonPhoto(): Flow<String?>
+    suspend fun personPhoto(): String?
+    suspend fun setPersonPhoto(path: String)
+
+    fun observeOnboarded(): Flow<Boolean>
+    suspend fun markOnboarded()
+}
+
 interface TryOnRepository {
     /** Renders [garment] onto [personImagePath]. Returns a URL or local path to the render. */
     suspend fun render(

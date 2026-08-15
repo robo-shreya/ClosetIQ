@@ -1,6 +1,7 @@
 package com.closetiq.android.ui.navigation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -20,6 +21,7 @@ import com.closetiq.android.ui.buycheck.BuyCheckScreen
 import com.closetiq.android.ui.closet.ClosetScreen
 import com.closetiq.android.ui.dormant.DormantQueueScreen
 import com.closetiq.android.ui.mirror.MirrorScreen
+import com.closetiq.android.ui.onboarding.OnboardingScreen
 import com.closetiq.android.ui.theme.Nocturne
 import kotlinx.coroutines.flow.map
 
@@ -54,6 +56,19 @@ sealed class Screen(
  */
 @Composable
 fun ClosetIqNavHost(container: AppContainer) {
+    val onboardedFlow = remember(container) { container.profileRepository.observeOnboarded() }
+    // null until the first read lands, so the tabs never flash before onboarding.
+    val onboarded by onboardedFlow.collectAsStateWithLifecycle(initialValue = null as Boolean?)
+
+    when (onboarded) {
+        null -> Box(modifier = Modifier.fillMaxSize().background(Nocturne.Bg))
+        false -> OnboardingScreen(container = container, onDone = {})
+        else -> MainShell(container)
+    }
+}
+
+@Composable
+private fun MainShell(container: AppContainer) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val current = Screen.fromRoute(backStackEntry?.destination?.route)

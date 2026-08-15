@@ -4,14 +4,17 @@ import android.content.Context
 import com.closetiq.android.data.image.ColorExtractor
 import com.closetiq.android.data.image.ImageStore
 import com.closetiq.android.data.local.ClosetDatabase
+import com.closetiq.android.data.local.ProfileStore
 import com.closetiq.android.data.remote.NetworkModule
 import com.closetiq.android.data.remote.TaskPoller
 import com.closetiq.android.data.repository.HeroRenderStrategy
+import com.closetiq.android.data.repository.ProfileRepositoryImpl
 import com.closetiq.android.data.repository.RenderStrategy
 import com.closetiq.android.data.repository.SkinRepositoryImpl
 import com.closetiq.android.data.repository.TryOnRepositoryImpl
 import com.closetiq.android.data.repository.WardrobeRepositoryImpl
 import com.closetiq.android.domain.engine.ScoringWeights
+import com.closetiq.android.domain.repository.ProfileRepository
 import com.closetiq.android.domain.repository.SkinRepository
 import com.closetiq.android.domain.repository.TryOnRepository
 import com.closetiq.android.domain.repository.WardrobeRepository
@@ -63,6 +66,10 @@ class AppContainer(context: Context) {
             colorExtractor = colorExtractor,
             scope = appScope
         )
+    }
+
+    val profileRepository: ProfileRepository by lazy {
+        ProfileRepositoryImpl(ProfileStore(appContext))
     }
 
     val skinRepository: SkinRepository by lazy {

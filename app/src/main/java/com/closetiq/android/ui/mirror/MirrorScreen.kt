@@ -103,6 +103,14 @@ fun MirrorScreen(
             pick != null -> PickSection(
                 pick = pick,
                 canRender = state.heroCanRender,
+                blockedReason = when {
+                    state.heroIsSwatch ->
+                        "This one is a colour swatch, so there's nothing to render. " +
+                            "Photograph it to try it on."
+                    state.personPhoto == null ->
+                        "Add a picture of you above and try-on will render onto it."
+                    else -> null
+                },
                 rendering = state.rendering,
                 renderUrl = state.renderUrl,
                 renderNote = state.renderNote,
@@ -221,6 +229,7 @@ private fun SkinCard(
 private fun PickSection(
     pick: OutfitPick,
     canRender: Boolean,
+    blockedReason: String?,
     rendering: Boolean,
     renderUrl: String?,
     renderNote: String?,
@@ -273,10 +282,9 @@ private fun PickSection(
 
         // The Gemma mock returns commentary instead of an image, so showing it proves the
         // whole path works end to end before YouCam is switched on.
-        if (!canRender) {
+        blockedReason?.let { reason ->
             Text(
-                text = "This one is a colour swatch, so there's nothing to render. " +
-                    "Photograph it to try it on.",
+                text = reason,
                 style = MaterialTheme.typography.bodySmall,
                 color = Nocturne.Neutral600
             )

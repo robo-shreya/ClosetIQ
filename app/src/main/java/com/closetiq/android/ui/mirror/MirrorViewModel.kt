@@ -10,6 +10,7 @@ import com.closetiq.android.data.image.ImageStore
 import com.closetiq.android.data.repository.RenderStrategy
 import com.closetiq.android.domain.model.OutfitPick
 import com.closetiq.android.domain.model.SkinReading
+import com.closetiq.android.domain.repository.ProfileRepository
 import com.closetiq.android.domain.repository.SkinRepository
 import com.closetiq.android.domain.repository.WardrobeRepository
 import com.closetiq.android.domain.usecase.GetTodaysPickUseCase
@@ -28,6 +29,8 @@ data class MirrorUiState(
     val renderUrl: String? = null,
     val renderNote: String? = null,
     val rendering: Boolean = false,
+    /** The stored photo of the user, reused as the body for every render. */
+    val personPhoto: String? = null,
     val analysing: Boolean = false,
     val error: String? = null
 ) {
@@ -36,12 +39,18 @@ data class MirrorUiState(
      * Surfaced as state so the button can explain itself instead of failing on tap.
      */
     val heroCanRender: Boolean
-        get() = pick?.hero?.garment?.let { it.cutoutPath ?: it.imagePath } != null
+        get() = personPhoto != null &&
+            pick?.hero?.garment?.let { it.cutoutPath ?: it.imagePath } != null
+
+    /** Distinguishes "no picture of you" from "this garment is only a swatch". */
+    val heroIsSwatch: Boolean
+        get() = pick?.hero?.garment?.let { it.cutoutPath ?: it.imagePath } == null
 }
 
 class MirrorViewModel(
     private val wardrobe: WardrobeRepository,
     private val skin: SkinRepository,
+    private val profile: ProfileRepository,
     private val getTodaysPick: GetTodaysPickUseCase,
     private val logWear: LogWearUseCase,
     private val renderStrategy: RenderStrategy,
@@ -50,9 +59,6 @@ class MirrorViewModel(
 
     private val _state = MutableStateFlow(MirrorUiState())
     val state = _state.asStateFlow()
-
-    /** The photo used for the VTO render. Also the image sent for skin analysis. */
-    private var personImagePath: String? = null
 
     init {
         refresh()
@@ -64,6 +70,7 @@ class MirrorViewModel(
 
             val reading = skin.currentFreshReading()
             val garments = wardrobe.observeActiveGarments().first()
+            val photo = profile.personPhoto()
 
             // Scoring is local and free, so it runs on every refresh whether or not
             // there is a skin reading. The app is useful without a selfie; it is just
@@ -73,6 +80,7 @@ class MirrorViewModel(
             _state.update {
                 it.copy(
                     loading = false,
+                    personPhoto = photo,
                     reading = reading,
                     readingIsFresh = reading != null,
                     pick = pick.getOrNull(),
@@ -93,7 +101,7 @@ class MirrorViewModel(
                     return@launch
                 }
 
-            personImagePath = path
+            profile.setPersonPhoto(path)
 
             skin.captureReading(path)
                 .onSuccess {
@@ -109,8 +117,10 @@ class MirrorViewModel(
     /** One render per session — only the hero item, only when the user asks. */
     fun onRenderHero() {
         val pick = _state.value.pick ?: return
-        val person = personImagePath ?: run {
-            _state.update { it.copy(error = "Take a photo first — VTO needs a picture of you.") }
+        val person = _state.value.personPhoto ?: run {
+            _state.update {
+                it.copy(error = "Add a picture of you first — try-on renders onto it.")
+            }
             return
         }
 
@@ -158,6 +168,7 @@ class MirrorViewModel(
                 MirrorViewModel(
                     wardrobe = container.wardrobeRepository,
                     skin = container.skinRepository,
+                    profile = container.profileRepository,
                     getTodaysPick = container.getTodaysPick,
                     logWear = container.logWear,
                     renderStrategy = container.renderStrategy,
