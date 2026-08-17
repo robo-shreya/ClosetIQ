@@ -1,32 +1,30 @@
-const gemmaMockProvider = require("./gemmaMockProvider");
 const youCamProvider = require("./youCamProvider");
 
 /**
- * Both providers expose exactly:
+ * The provider exposes exactly:
  *   createTask(input) -> { taskId, status }
  *   getTask(taskId)   -> { taskId, status, result?, error? }
  *
- * Keeping the shapes identical is what makes the swap a one-line env change.
+ * That shape used to be shared with a local Gemma mock — the same interface implemented
+ * against a free model, so the whole async pipeline (upload, poll, backoff, error
+ * handling) could be built and proven before spending a real credit. The mock is gone
+ * now that the app is past that stage; this indirection is what let removing it be a
+ * one-file change instead of a rewrite.
+ *
  * PROVIDER is the current name; TRYON_PROVIDER is still read so an older .env works.
  */
 function providerName() {
-    return (process.env.PROVIDER || process.env.TRYON_PROVIDER || "gemma").toLowerCase();
+    return (process.env.PROVIDER || process.env.TRYON_PROVIDER || "youcam").toLowerCase();
 }
 
 function getProvider() {
     const name = providerName();
 
-    if (name === "gemma") {
-        return gemmaMockProvider;
+    if (name !== "youcam") {
+        throw new Error(`Unknown PROVIDER: ${name}. Only "youcam" is supported.`);
     }
 
-    if (name === "youcam") {
-        return youCamProvider;
-    }
-
-    throw new Error(
-        `Unknown PROVIDER: ${name}. Use "gemma" or "youcam".`
-    );
+    return youCamProvider;
 }
 
 module.exports = {

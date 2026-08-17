@@ -1,12 +1,15 @@
 /**
  * Real PerfectCorp YouCam provider.
  *
- * Exposes the same two functions as the Gemma mock, and returns the same shapes:
+ * Exposes exactly the interface providers/index.js expects:
  *   createTask(input) -> { taskId, status }
  *   getTask(taskId)   -> { taskId, status, result?, error? }
  *
- * Switching between them is one line in backend/.env. Every quirk of YouCam's own
- * response format is absorbed here, so the Android app cannot tell the difference.
+ * A local Gemma mock implemented this same shape during early development, so the whole
+ * async pipeline — upload, poll, backoff, error handling — was proven before this file
+ * ever spent a real credit. It has been removed now that its job is done; every quirk of
+ * YouCam's own response format is absorbed here, so the Android app cannot tell either
+ * provider was ever there.
  *
  * ---------------------------------------------------------------------------
  * The API key lives here and only here. An APK is a zip file — anything compiled

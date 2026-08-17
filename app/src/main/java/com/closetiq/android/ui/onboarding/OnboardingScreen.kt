@@ -48,6 +48,7 @@ import com.closetiq.android.domain.model.PersonPhotos
 import com.closetiq.android.domain.model.PhotoSlot
 import com.closetiq.android.domain.repository.ProfileRepository
 import com.closetiq.android.domain.repository.SkinRepository
+import com.closetiq.android.ui.additem.AddItemScreen
 import com.closetiq.android.ui.components.DashedPanel
 import com.closetiq.android.ui.components.Footnote
 import com.closetiq.android.ui.components.Kicker
@@ -63,7 +64,18 @@ import java.io.File
 private const val SELFIE_PREVIEW_HEIGHT_DP = 240
 private const val BODY_TILE_HEIGHT_DP = 132
 
+/**
+ * Two steps, in the order the app needs them: who you are, then what you own.
+ *
+ * The photos step used to end with "Open my closet", which left the user on a tab bar
+ * having to work out what to do next. Handing them straight to the add-item screen means
+ * first run finishes with a wardrobe that has something of theirs in it, and a Mirror that
+ * has a real reason to show anything.
+ */
+enum class OnboardingStep { PHOTOS, FIRST_GARMENT }
+
 data class OnboardingUiState(
+    val step: OnboardingStep = OnboardingStep.PHOTOS,
     val photos: PersonPhotos = PersonPhotos.EMPTY,
     /** Which slot is mid-import, so only that tile shows a spinner. */
     val busySlot: PhotoSlot? = null,
@@ -137,6 +149,10 @@ class OnboardingViewModel(
             }
     }
 
+    fun toGarmentStep() = _state.update { it.copy(step = OnboardingStep.FIRST_GARMENT) }
+
+    fun backToPhotos() = _state.update { it.copy(step = OnboardingStep.PHOTOS) }
+
     fun finish(onDone: () -> Unit) {
         viewModelScope.launch {
             profile.markOnboarded()
@@ -177,12 +193,106 @@ fun OnboardingScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    when (state.step) {
+        OnboardingStep.PHOTOS -> PhotosStep(
+            state = state,
+            onPick = viewModel::onPhotoPicked,
+            onNext = viewModel::toGarmentStep,
+            onSkip = { viewModel.finish(onDone) }
+        )
+
+        OnboardingStep.FIRST_GARMENT -> FirstGarmentStep(
+            container = container,
+            onBack = viewModel::backToPhotos,
+            onAdded = { viewModel.finish(onDone) },
+            onSkip = { viewModel.finish(onDone) }
+        )
+    }
+}
+
+/**
+ * The first garment, added before onboarding is over.
+ *
+ * This is the whole add-item screen, not a copy of it. Reusing it means the colour-derived
+ * name and try-on are in first run for free, and there is only ever one add flow to keep
+ * working. The framing above it is fixed while the screen scrolls underneath — nesting one
+ * vertical scroll inside another would crash.
+ */
+@Composable
+private fun FirstGarmentStep(
+    container: AppContainer,
+    onBack: () -> Unit,
+    onAdded: () -> Unit,
+    onSkip: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+    ) {
+        // Both step controls sit above the add screen, not below it. Putting them at the
+        // bottom left "Save to closet" clipped to a one-pixel sliver — the primary action,
+        // invisible — because the embedded screen scrolls inside whatever height is left.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 8.dp, end = 8.dp, top = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = onBack) {
+                Text(
+                    text = "← Photos",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Nocturne.Neutral500
+                )
+            }
+            TextButton(onClick = onSkip) {
+                Text(
+                    text = "Skip for now",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Nocturne.Neutral500
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Kicker("Step 2 of 2", color = Nocturne.Neutral600)
+            Text(
+                text = "Add something you own",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Nocturne.Text
+            )
+            Text(
+                text = "Your closet already has a few examples. Add one thing of yours — the " +
+                    "name writes itself from the photo.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Nocturne.Neutral400
+            )
+        }
+
+        Box(modifier = Modifier.weight(1f)) {
+            AddItemScreen(container = container, onDone = onAdded)
+        }
+    }
+}
+
+@Composable
+private fun PhotosStep(
+    state: OnboardingUiState,
+    onPick: (PhotoSlot, Uri) -> Unit,
+    onNext: () -> Unit,
+    onSkip: () -> Unit
+) {
     // One launcher serves every slot; this remembers which tile asked.
     var pendingSlot by remember { mutableStateOf(PhotoSlot.SELFIE) }
 
     val picker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri -> uri?.let { viewModel.onPhotoPicked(pendingSlot, it) } }
+    ) { uri -> uri?.let { onPick(pendingSlot, it) } }
 
     fun pick(slot: PhotoSlot) {
         pendingSlot = slot
@@ -197,7 +307,7 @@ fun OnboardingScreen(
             .padding(start = 20.dp, end = 20.dp, top = 32.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Kicker("First, your photos", color = Nocturne.Neutral600)
+        Kicker("Step 1 of 2", color = Nocturne.Neutral600)
         Text(
             text = "A few pictures of you",
             style = MaterialTheme.typography.headlineMedium,
@@ -259,7 +369,7 @@ fun OnboardingScreen(
         }
 
         Button(
-            onClick = { viewModel.finish(onDone) },
+            onClick = onNext,
             enabled = !state.working,
             shape = RadiusMd,
             colors = ButtonDefaults.buttonColors(
@@ -270,12 +380,12 @@ fun OnboardingScreen(
             ),
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) {
-            Text(if (state.photos.hasAny) "Open my closet" else "Continue")
+            Text("Next — add a garment")
         }
 
         if (!state.photos.hasAny) {
             TextButton(
-                onClick = { viewModel.finish(onDone) },
+                onClick = onSkip,
                 enabled = !state.working,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {

@@ -2,8 +2,10 @@ package com.closetiq.android.domain.usecase
 
 import com.closetiq.android.domain.engine.PaletteEngine
 import com.closetiq.android.domain.engine.SkinStateModifier
+import com.closetiq.android.domain.model.Category
 import com.closetiq.android.domain.model.Garment
 import com.closetiq.android.domain.model.OutfitPick
+import com.closetiq.android.domain.model.ScoredGarment
 import com.closetiq.android.domain.model.SkinReading
 
 /**
@@ -36,11 +38,8 @@ class GetTodaysPickUseCase(
 
         val hero = scored.first()
 
-        // The hero is the one we render. Everything else is shown as flat tiles beside it.
-        val supporting = scored
-            .drop(1)
-            .filter { it.garment.category != hero.garment.category }
-            .take(2)
+        // The hero is the one we render. The tiles beside it complete an outfit.
+        val supporting = completeOutfit(hero, scored)
 
         // Both halves, always. The dormancy half is the product's premise and the skin
         // half is what makes today different from yesterday — either one alone reads as
@@ -55,6 +54,65 @@ class GetTodaysPickUseCase(
         }
 
         return OutfitPick(hero = hero, supporting = supporting, reason = reason)
+    }
+
+    /**
+     * The four things a suggested outfit is made of.
+     *
+     * Outerwear is its own slot rather than an alternative to a top, because a blazer and
+     * the shirt under it are two decisions. Only one of them can be *rendered* — try-on
+     * replaces a body region instead of layering over it — but both are worth suggesting.
+     */
+    private enum class Slot { OUTER, TOP, BOTTOM, FEET }
+
+    private companion object {
+        /** The Mirror shows the hero plus three tiles: outerwear, top, bottom, shoes. */
+        const val MAX_SUPPORTING = 3
+
+        /** Which categories already fill a slot. A dress fills both halves at once. */
+        val COVERAGE = linkedMapOf(
+            Slot.OUTER to setOf(Category.OUTERWEAR),
+            Slot.TOP to setOf(Category.TOP, Category.DRESS),
+            Slot.BOTTOM to setOf(Category.BOTTOM, Category.DRESS),
+            Slot.FEET to setOf(Category.SHOES)
+        )
+
+        /** What to reach for when a slot is empty. */
+        val PREFERRED = mapOf(
+            Slot.OUTER to Category.OUTERWEAR,
+            Slot.TOP to Category.TOP,
+            Slot.BOTTOM to Category.BOTTOM,
+            Slot.FEET to Category.SHOES
+        )
+    }
+
+    /**
+     * Fills out the hero into a whole outfit: outerwear, top, bottom and shoes.
+     *
+     * The previous rule only excluded the hero's own category, which let both tiles come
+     * back as the same kind of thing — two tees beside a blazer. Ranking alone will always
+     * do that, because the most dormant garments in a wardrobe cluster: nobody neglects one
+     * item per category evenly.
+     *
+     * So the slots are filled by what the outfit still needs rather than by score order
+     * alone. Within a needed slot the highest-scoring garment still wins, so dormancy and
+     * today's skin decide *which* top — just not whether a top is what is missing.
+     */
+    private fun completeOutfit(
+        hero: ScoredGarment,
+        scored: List<ScoredGarment>
+    ): List<ScoredGarment> {
+        val needed = COVERAGE.keys.filterNot { part ->
+            COVERAGE[part]?.contains(hero.garment.category) == true
+        }
+
+        val taken = mutableSetOf(hero)
+
+        return needed.mapNotNull { slot ->
+            val wanted = PREFERRED[slot] ?: return@mapNotNull null
+            scored.firstOrNull { it !in taken && it.garment.category == wanted }
+                ?.also { taken += it }
+        }.take(MAX_SUPPORTING)
     }
 
     private fun dormancyPhrase(garment: Garment, now: Long): String {

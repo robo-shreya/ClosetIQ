@@ -8,8 +8,11 @@ import retrofit2.http.Path
 /**
  * The app only ever talks to your own backend. It never sees a YouCam URL or credential.
  *
- * Which provider actually serves these calls — the Gemma mock or real YouCam — is decided
- * by the PROVIDER value in backend/.env. Nothing in the Android app changes when you swap.
+ * Which provider actually serves these calls is decided by the PROVIDER value in
+ * backend/.env, not by anything in this app. It was two providers during development — a
+ * local Gemma mock alongside real YouCam, same interface, so the whole async pipeline
+ * could be proven before a credit was spent — and is one now that the mock has served
+ * its purpose and been removed.
  */
 interface ClosetIqApi {
 

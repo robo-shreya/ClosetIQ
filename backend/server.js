@@ -23,8 +23,9 @@ app.get("/health", (request, response) => {
 
 /**
  * One task endpoint for both YouCam capabilities, because both are async in exactly the
- * same way. The app has one poller instead of two, and swapping Gemma for YouCam is a
- * change to backend/.env — nothing in the Android app moves.
+ * same way. The app has one poller instead of two, and swapping the backend provider —
+ * a local Gemma mock stood in here for most of development — is a change to
+ * backend/.env, never to the Android app.
  *
  * Body: { kind: "TRY_ON" | "SKIN_ANALYSIS", personImage?, garmentImage?, renderTarget? }
  */

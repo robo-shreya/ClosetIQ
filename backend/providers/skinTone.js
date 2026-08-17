@@ -3,8 +3,8 @@
  *
  * YouCam's Skin Tone Analysis does not return either one — it returns hex colours
  * (skin, eye, lip, eyebrow, hair). Both values our app needs are computed from
- * `skin_color` here, so the contract the Android app sees stays identical whether the
- * provider is YouCam or the Gemma mock.
+ * `skin_color` here, so the contract the Android app sees stays identical regardless of
+ * which provider implementation sits behind it.
  */
 
 function hexToRgb(hex) {

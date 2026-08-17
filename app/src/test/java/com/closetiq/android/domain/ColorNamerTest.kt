@@ -51,6 +51,17 @@ class ColorNamerTest {
     }
 
     @Test
+    fun `a pale lilac is purple, not pink`() {
+        // Measured from the lilac blouse in the demo wardrobe. It came back "Blush" before
+        // purple had its own muted band — the wrong colour, not merely an imprecise one.
+        assertEquals("Lilac", ColorNamer.name(LabColor(78f, 12f, -14f)))
+
+        // The pink band still has to work either side of it.
+        assertEquals("Blush", ColorNamer.name(LabColor(80f, 16f, 2f)))
+        assertEquals("Aubergine", ColorNamer.name(LabColor(30f, 14f, -12f)))
+    }
+
+    @Test
     fun `vivid tones keep their own names`() {
         // Mustard cardigan, Rust corduroy shirt, Tan suede loafers, Green tee.
         assertEquals("Mustard", ColorNamer.name(LabColor(70f, 8f, 52f)))

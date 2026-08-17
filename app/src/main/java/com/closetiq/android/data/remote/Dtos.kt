@@ -8,7 +8,8 @@ import kotlinx.serialization.Serializable
  *
  * One task shape covers both YouCam capabilities, because both are async in exactly the
  * same way: create a task, poll it. Keeping them identical means one poller in the app
- * instead of two, and it is why swapping Gemma for YouCam is a backend-only change.
+ * instead of two, and it is what let the backend swap between providers — a local Gemma
+ * mock during early development, real YouCam now — without touching this file.
  */
 
 @Serializable
@@ -55,9 +56,13 @@ data class TaskResponse(
 
 @Serializable
 data class TaskResult(
-    /** TRY_ON. Null when the provider produced no image — the Gemma mock usually does not. */
+    /**
+     * TRY_ON. Null when nothing was produced — `cloth` can report task_status "success"
+     * with an empty results object when it can't use the photos it was given, rather than
+     * an error. [note] is what tells the user why.
+     */
     val imageUrl: String? = null,
-    /** Provider commentary. With Gemma this is the interesting part. */
+    /** Provider commentary — explains an empty [imageUrl], or carries the plain error. */
     val note: String? = null,
     /** SKIN_ANALYSIS. */
     val skin: SkinResultDto? = null

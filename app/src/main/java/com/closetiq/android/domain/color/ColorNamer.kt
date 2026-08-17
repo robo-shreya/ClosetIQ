@@ -71,9 +71,14 @@ object ColorNamer {
             l >= 45f -> "Slate blue"
             else -> "Navy"
         }
+        Family.PURPLE -> when {
+            l >= 70f -> "Lilac"
+            l >= 45f -> "Mauve"
+            else -> "Aubergine"
+        }
         Family.PINK -> when {
             l >= 70f -> "Blush"
-            l >= 45f -> "Mauve"
+            l >= 45f -> "Rose"
             else -> "Plum"
         }
     }
@@ -136,14 +141,21 @@ object ColorNamer {
         }
     }
 
-    private enum class Family { WARM, GREEN, BLUE, PINK }
+    private enum class Family { WARM, GREEN, BLUE, PURPLE, PINK }
 
-    /** Coarse bands for the muted table, which needs four names rather than eleven. */
+    /**
+     * Coarse bands for the muted table, which needs five names rather than eleven.
+     *
+     * Purple is its own band because without it a pale lilac lands in the pink family and
+     * comes back "Blush" — which is what a real lilac blouse got, and it reads as the wrong
+     * colour rather than merely an imprecise one.
+     */
     private fun family(hue: Float): Family = when {
         hue < 20f -> Family.PINK
         hue < 105f -> Family.WARM
         hue < 200f -> Family.GREEN
         hue < 300f -> Family.BLUE
+        hue < 345f -> Family.PURPLE
         else -> Family.PINK
     }
 

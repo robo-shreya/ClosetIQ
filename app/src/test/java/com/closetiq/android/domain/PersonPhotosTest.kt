@@ -43,23 +43,30 @@ class PersonPhotosTest {
     }
 
     @Test
-    fun `a lone selfie is accepted for upper body only`() {
-        val onlySelfie = PersonPhotos(selfie = "selfie.jpg")
+    fun `a selfie plus a lower body shot cannot dress the torso`() {
+        // The exact profile that produced the live failure: the Mirror's hero was a top,
+        // nothing upper-body was on file, and the selfie got sent to the cloth endpoint.
+        val asFilmed = PersonPhotos(selfie = "selfie.jpg", lowerBody = "lower.jpg")
 
-        // Shoulders and chest are usually in frame, so this one is worth attempting.
-        assertEquals("selfie.jpg", onlySelfie.bestFor(RenderTarget.UPPER_BODY))
-        assertEquals("selfie.jpg", onlySelfie.bestFor(RenderTarget.AUTO))
+        assertNull(asFilmed.bestFor(RenderTarget.UPPER_BODY))
+        assertEquals(PhotoSlot.UPPER_BODY, asFilmed.preferredSlotFor(RenderTarget.UPPER_BODY))
+        assertEquals("lower.jpg", asFilmed.bestFor(RenderTarget.LOWER_BODY))
     }
 
     @Test
-    fun `a lone selfie is refused for every region it cannot contain`() {
+    fun `a selfie is never a render source, for any target`() {
         val onlySelfie = PersonPhotos(selfie = "selfie.jpg")
 
-        // There are no legs in a selfie. Attempting these burns a credit for an empty
-        // result that the API reports as success.
-        assertNull(onlySelfie.bestFor(RenderTarget.LOWER_BODY))
-        assertNull(onlySelfie.bestFor(RenderTarget.SHOES))
-        assertNull(onlySelfie.bestFor(RenderTarget.FULL_BODY))
+        // This regressed once. The selfie was allowed to stand in for UPPER_BODY, on the
+        // theory that a head-and-shoulders shot carries enough chest to dress. YouCam
+        // rejected exactly that with error_src_face_too_small, from the Mirror, on a real
+        // device — and it contradicted what onboarding promises the selfie is for.
+        RenderTarget.entries.forEach { target ->
+            assertNull(
+                "$target must not resolve to the selfie",
+                onlySelfie.bestFor(target)
+            )
+        }
     }
 
     @Test

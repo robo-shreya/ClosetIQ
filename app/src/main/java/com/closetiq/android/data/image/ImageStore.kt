@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.net.URL
 import java.util.UUID
 
 /**
@@ -59,6 +60,24 @@ class ImageStore(private val context: Context) {
                 requireNotNull(BitmapFactory.decodeStream(input)) { "Could not decode $assetName" }
             }
             save(ImagePreflight.prepare(bitmap), name = assetName.substringAfterLast('/'))
+        }.getOrNull()
+    }
+
+    /**
+     * Downloads a finished render and keeps it.
+     *
+     * Needed twice over. Chaining try-on calls means feeding one render back in as the
+     * person image for the next garment, and the API only ever hands back a URL — so the
+     * bytes have to come down before they can go up again. It also solves the expiry
+     * problem on its own: YouCam signs result URLs with `X-Amz-Expires=7200`, so a render
+     * that is only ever referenced by link is gone two hours later.
+     */
+    suspend fun importFromUrl(url: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val bitmap = URL(url).openStream().use { input ->
+                requireNotNull(BitmapFactory.decodeStream(input)) { "Could not decode $url" }
+            }
+            save(ImagePreflight.prepare(bitmap))
         }.getOrNull()
     }
 

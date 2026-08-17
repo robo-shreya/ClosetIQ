@@ -6,6 +6,6 @@ import kotlinx.serialization.Serializable
 data class HealthResponse(
     val status: String,
     val service: String? = null,
-    /** Which provider the backend is currently running: "gemma" or "youcam". */
+    /** Which backend provider is live. Currently always "youcam". */
     val provider: String? = null
 )

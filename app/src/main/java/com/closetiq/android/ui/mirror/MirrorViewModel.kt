@@ -32,6 +32,8 @@ data class MirrorUiState(
     val renderUrl: String? = null,
     val renderNote: String? = null,
     val rendering: Boolean = false,
+    /** Which chained pass is in flight, as (pass, total). Null when idle. */
+    val renderPass: Pair<Int, Int>? = null,
     /** Every picture of the user on file, resolved per render target. */
     val photos: PersonPhotos = PersonPhotos.EMPTY,
     val analysing: Boolean = false,
@@ -166,21 +168,34 @@ class MirrorViewModel(
             return
         }
 
-        viewModelScope.launch {
-            _state.update { it.copy(rendering = true, error = null) }
+        // The whole outfit, not just the hero: the chained strategy renders one garment
+        // per body region, each onto the output of the last.
+        val outfit = listOf(pick.hero.garment) + pick.supporting.map { it.garment }
 
-            renderStrategy.render(person, listOf(pick.hero.garment))
+        viewModelScope.launch {
+            _state.update { it.copy(rendering = true, error = null, renderPass = null) }
+
+            renderStrategy.render(
+                personImagePath = person,
+                garments = outfit,
+                onProgress = { pass, total ->
+                    _state.update { it.copy(renderPass = pass to total) }
+                }
+            )
                 .onSuccess { result ->
                     _state.update {
                         it.copy(
                             rendering = false,
+                            renderPass = null,
                             renderUrl = result.imageUrl,
                             renderNote = result.note
                         )
                     }
                 }
                 .onFailure { error ->
-                    _state.update { it.copy(rendering = false, error = describe(error)) }
+                    _state.update {
+                        it.copy(rendering = false, renderPass = null, error = describe(error))
+                    }
                 }
         }
     }

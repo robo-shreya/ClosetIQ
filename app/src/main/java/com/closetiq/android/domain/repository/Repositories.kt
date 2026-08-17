@@ -95,8 +95,11 @@ interface TryOnRepository {
 }
 
 data class RenderResult(
-    /** Null when the provider returned no image — the mock backend often does. */
+    /**
+     * Null when `cloth` reported success but produced nothing — a valid but unusable pair
+     * of photos, not an error. [note] explains it.
+     */
     val imageUrl: String?,
-    /** Provider commentary. With the Gemma mock this is the interesting part. */
+    /** Provider commentary — explains an empty [imageUrl], or carries the plain error. */
     val note: String?
 )

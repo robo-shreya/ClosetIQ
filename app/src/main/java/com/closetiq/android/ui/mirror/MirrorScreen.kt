@@ -136,6 +136,7 @@ fun MirrorScreen(
                     else -> null
                 },
                 rendering = state.rendering,
+                renderPass = state.renderPass,
                 renderUrl = state.renderUrl,
                 renderNote = state.renderNote,
                 onRender = viewModel::onRenderHero,
@@ -256,6 +257,7 @@ private fun PickSection(
     canRender: Boolean,
     blockedReason: String?,
     rendering: Boolean,
+    renderPass: Pair<Int, Int>?,
     renderUrl: String?,
     renderNote: String?,
     onRender: () -> Unit,
@@ -288,7 +290,11 @@ private fun PickSection(
             ) {
                 NocturneSpinner()
                 Text(
-                    text = "One VTO render…",
+                    // A chained outfit is three calls and roughly thirty seconds, so the
+                    // spinner has to say where it has got to.
+                    text = renderPass?.let { (pass, total) ->
+                        if (total > 1) "Layer $pass of $total…" else "One VTO render…"
+                    } ?: "One VTO render…",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Nocturne.Neutral400
                 )
@@ -307,8 +313,6 @@ private fun PickSection(
             )
         }
 
-        // The Gemma mock returns commentary instead of an image, so showing it proves the
-        // whole path works end to end before YouCam is switched on.
         blockedReason?.let { reason ->
             Text(
                 text = reason,
@@ -317,6 +321,9 @@ private fun PickSection(
             )
         }
 
+        // `cloth` can report task_status "success" with an empty results object rather
+        // than an error when it can't use the photos it was given. Showing note here is
+        // what turns that into an explanation instead of a silent blank frame.
         renderNote?.let { note ->
             Text(
                 text = note,

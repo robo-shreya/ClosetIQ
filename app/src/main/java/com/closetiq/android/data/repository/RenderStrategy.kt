@@ -5,8 +5,8 @@ import com.closetiq.android.data.remote.CreateTaskRequest
 import com.closetiq.android.data.remote.ImagePayload
 import com.closetiq.android.data.remote.TaskKind
 import com.closetiq.android.data.remote.TaskPoller
+import com.closetiq.android.domain.model.Category
 import com.closetiq.android.domain.model.Garment
-import com.closetiq.android.domain.model.RenderTarget
 import com.closetiq.android.domain.repository.RenderResult
 
 /**
@@ -19,9 +19,15 @@ import com.closetiq.android.domain.repository.RenderResult
  * Nothing above the data layer changes either way.
  */
 interface RenderStrategy {
+    /**
+     * @param onProgress called as `(pass, totalPasses)` before each call, so a screen can
+     *   say "2 of 3" through a chain that takes half a minute instead of showing one
+     *   undifferentiated spinner.
+     */
     suspend fun render(
         personImagePath: String,
-        garments: List<Garment>
+        garments: List<Garment>,
+        onProgress: (Int, Int) -> Unit = { _, _ -> }
     ): Result<RenderResult>
 }
 
@@ -39,8 +45,11 @@ class HeroRenderStrategy(
 
     override suspend fun render(
         personImagePath: String,
-        garments: List<Garment>
+        garments: List<Garment>,
+        onProgress: (Int, Int) -> Unit
     ): Result<RenderResult> {
+        onProgress(1, 1)
+
         val hero = garments.firstOrNull()
             ?: return Result.failure(IllegalArgumentException("No garment to render"))
 
@@ -69,32 +78,122 @@ class HeroRenderStrategy(
 }
 
 /**
- * Two to three chained calls: render the top, feed that output back in as the person
- * image, render the bottom, and so on.
+ * One call per body region, each rendering onto the output of the last: the blazer onto
+ * your photo, the trousers onto that render, the shoes onto that one. The result is a
+ * whole outfit rather than one garment over your own clothes.
  *
- * TODO(after the playground test): implement by looping [garments] in
- * UPPER_BODY → LOWER_BODY → SHOES order, downloading each render, saving it via
- * ImageStore, and using it as the person image for the next pass.
+ * Passes run in the order a person dresses — top, bottom, then outerwear over the top,
+ * then shoes — so an open blazer or overshirt has a shirt underneath it to show.
  *
- * Before writing this, verify the thing it depends on: download a VTO output, feed it
- * back in with a second garment, and look hard at the face and hands. Artefacts compound
- * across passes. If they show up, delete this class and keep [HeroRenderStrategy].
+ * Costs one call per pass at roughly ten seconds each, so a four-piece outfit is about
+ * forty-five seconds and four credits. Generative drift compounds across passes: each one
+ * re-generates the whole person, including the face, from an image that was itself
+ * generated. Seams and re-framing are the artefacts to watch for.
  */
 class ChainedRenderStrategy(
     private val imageStore: ImageStore,
     private val poller: TaskPoller
 ) : RenderStrategy {
 
-    private val order = listOf(
-        RenderTarget.UPPER_BODY,
-        RenderTarget.LOWER_BODY,
-        RenderTarget.SHOES
-    )
-
     override suspend fun render(
         personImagePath: String,
-        garments: List<Garment>
+        garments: List<Garment>,
+        onProgress: (Int, Int) -> Unit
     ): Result<RenderResult> {
-        TODO("Chain one VTO call per garment, feeding each render in as the next person image")
+        val passes = planPasses(garments)
+        if (passes.isEmpty()) {
+            return Result.failure(IllegalArgumentException("Nothing in this outfit can be rendered"))
+        }
+
+        var personPath = personImagePath
+        var lastUrl: String? = null
+        val skipped = mutableListOf<String>()
+
+        passes.forEachIndexed { index, garment ->
+            onProgress(index + 1, passes.size)
+
+            val outcome = renderOne(personPath, garment)
+            val url = outcome.getOrElse { error -> return Result.failure(error) }
+
+            if (url == null) {
+                // A pass that produced nothing is not fatal — the passes before it are
+                // still a real render. Say which garment dropped out rather than silently
+                // returning a partial outfit as if it were complete.
+                skipped += garment.label
+                return@forEachIndexed
+            }
+
+            // The chain lives or dies on this: the next pass needs bytes, and the API only
+            // ever returns a URL. A failed download ends the chain where it stands rather
+            // than sending the previous person image again and rendering the same layer twice.
+            val saved = imageStore.importFromUrl(url)
+            lastUrl = url
+
+            if (saved == null && index < passes.lastIndex) {
+                skipped += passes.drop(index + 1).map { it.label }
+                return@forEachIndexed
+            }
+            if (saved != null) personPath = saved
+        }
+
+        val note = when {
+            lastUrl == null -> "Try-on produced no image for any layer of this outfit."
+            skipped.isEmpty() -> null
+            else -> "Rendered without ${skipped.joinToString(" and ")} — " +
+                "YouCam returned no image for those layers."
+        }
+
+        return Result.success(RenderResult(imageUrl = lastUrl, note = note))
     }
+
+    /**
+     * The outfit, dressed in the order a person dresses: base layers first, then what goes
+     * over them.
+     *
+     * The top is rendered *and* the outerwear on top of it. It would be easy to assume the
+     * second upper-body pass simply discards the first — both target `upper_body`, and VTO
+     * replaces a region rather than compositing layers. But a blazer or an overshirt worn
+     * open shows the shirt underneath, and the outerwear pass reads a source image that
+     * already has the tee in it, so the model has something to render the opening over.
+     *
+     * A dress is its own base layer and makes a separate top and bottom meaningless, so it
+     * replaces both.
+     */
+    private fun planPasses(garments: List<Garment>): List<Garment> {
+        val renderable = garments.filter { (it.cutoutPath ?: it.imagePath) != null }
+        fun of(category: Category) = renderable.firstOrNull { it.category == category }
+
+        val dress = of(Category.DRESS)
+
+        val base = if (dress != null) {
+            listOf(dress)
+        } else {
+            listOfNotNull(of(Category.TOP), of(Category.BOTTOM))
+        }
+
+        return base + listOfNotNull(of(Category.OUTERWEAR), of(Category.SHOES))
+    }
+
+    private suspend fun renderOne(personPath: String, garment: Garment): Result<String?> {
+        val personBase64 = imageStore.toBase64(personPath)
+            ?: return Result.failure(IllegalStateException("No person image at $personPath"))
+
+        val garmentPath = garment.cutoutPath ?: garment.imagePath
+            ?: return Result.failure(
+                IllegalStateException("'${garment.label}' has no photo")
+            )
+
+        val garmentBase64 = imageStore.toBase64(garmentPath)
+            ?: return Result.failure(IllegalStateException("No garment image at $garmentPath"))
+
+        return poller.run(
+            CreateTaskRequest(
+                kind = TaskKind.TRY_ON,
+                personImage = ImagePayload(base64 = personBase64),
+                garmentImage = ImagePayload(base64 = garmentBase64),
+                renderTarget = garment.category.renderTarget.name
+            )
+        ).map { it.imageUrl }
+    }
+
 }

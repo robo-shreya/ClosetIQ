@@ -175,15 +175,20 @@ data class PersonPhotos(
      * guaranteed empty result, and `cloth` reports that as *success* with no image. So
      * falling back to any photo at all would spend a real credit to produce nothing and
      * no error. Better to say up front which picture is missing.
+     *
+     * **The selfie is never a render source.** It was briefly allowed to stand in for
+     * [RenderTarget.UPPER_BODY], on the theory that a head-and-shoulders shot carries
+     * enough chest to dress. It does not: YouCam rejected exactly that pairing with
+     * `error_src_face_too_small`, from the Mirror, on a real device. It also contradicted
+     * what onboarding tells the user — that the selfie reads skin and the body shots are
+     * what try-on renders onto. The selfie now does only the job it is asked for.
      */
     fun bestFor(target: RenderTarget): String? = when (target) {
-        // A selfie usually carries shoulders and some chest, so it is a fair last resort
-        // here and only here.
-        RenderTarget.UPPER_BODY -> upperBody ?: fullBody ?: selfie
+        RenderTarget.UPPER_BODY -> upperBody ?: fullBody
         RenderTarget.LOWER_BODY -> lowerBody ?: fullBody
         RenderTarget.FULL_BODY -> fullBody ?: upperBody
         RenderTarget.SHOES -> fullBody ?: lowerBody
-        RenderTarget.AUTO -> fullBody ?: upperBody ?: selfie
+        RenderTarget.AUTO -> fullBody ?: upperBody
     }
 
     /**

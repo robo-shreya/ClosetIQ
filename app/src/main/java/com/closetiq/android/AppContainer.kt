@@ -7,6 +7,7 @@ import com.closetiq.android.data.local.ClosetDatabase
 import com.closetiq.android.data.local.ProfileStore
 import com.closetiq.android.data.remote.NetworkModule
 import com.closetiq.android.data.remote.TaskPoller
+import com.closetiq.android.data.repository.ChainedRenderStrategy
 import com.closetiq.android.data.repository.HeroRenderStrategy
 import com.closetiq.android.data.repository.ProfileRepositoryImpl
 import com.closetiq.android.data.repository.RenderStrategy
@@ -85,11 +86,15 @@ class AppContainer(context: Context) {
     }
 
     /**
-     * Swap this to ChainedRenderStrategy once the playground test says chaining survives.
-     * It is the only line that has to change.
+     * Chained: one call per body region, each rendering onto the output of the last, so the
+     * Mirror shows a whole outfit rather than one garment over the user's own clothes.
+     *
+     * Costs three calls and about thirty seconds for a three-piece outfit, against one call
+     * and ten seconds for HeroRenderStrategy — which is still here, and still the swap to
+     * make if generative drift across passes turns out to be unacceptable.
      */
     val renderStrategy: RenderStrategy by lazy {
-        HeroRenderStrategy(imageStore = imageStore, poller = taskPoller)
+        ChainedRenderStrategy(imageStore = imageStore, poller = taskPoller)
     }
 
     // ---- use cases ----
