@@ -61,6 +61,11 @@ import kotlin.math.roundToInt
  * the render, then "wore it". The reason line sits directly under the hero name and
  * above the buttons, because the argument has to land before the picture does — and
  * because it must be visible without scrolling.
+ *
+ * The selfie now comes first and nothing is suggested without one. Scoring does still work
+ * without a reading, but a pick offered before the app has looked at the user reads as a
+ * guess — and it left the skin card sitting above it as an ignorable option. Asking here is
+ * also the only place the selfie is asked for at all, now that onboarding is gone.
  */
 @Composable
 fun MirrorScreen(
@@ -70,7 +75,7 @@ fun MirrorScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     // The card above reads skin, so its picker always means "a new selfie". Body shots are
-    // attached during onboarding, or from the add-item screen for a one-off.
+    // attached from the prompt below, or from the add-item screen.
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { viewModel.onPhotoPicked(PhotoSlot.SELFIE, it) } }
@@ -95,6 +100,7 @@ fun MirrorScreen(
     ) {
         SkinCard(
             reading = state.reading,
+            selfiePath = state.photos.selfie,
             analysing = state.analysing,
             onCheckMirror = { photoPicker.launch("image/*") },
             onRetake = { photoPicker.launch("image/*") }
@@ -104,65 +110,79 @@ fun MirrorScreen(
             ErrorNote(message = message, onDismiss = viewModel::dismissError)
         }
 
-        SectionLabel("The pick")
+        // No selfie, no suggestion. The gate is the selfie rather than the reading itself,
+        // so a failed Skin Analysis call still leaves a usable app: the photo is on file,
+        // scoring runs locally, and the pick is simply not sharpened by a reading.
+        if (state.photos.selfie != null) {
+            SectionLabel("The pick")
 
-        when {
-            state.loading -> Box(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                contentAlignment = Alignment.Center
-            ) { NocturneSpinner(size = 20.dp) }
+            when {
+                state.loading -> Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center
+                ) { NocturneSpinner(size = 20.dp) }
 
-            pick != null -> PickSection(
-                pick = pick,
-                canRender = state.heroCanRender,
-                blockedReason = when {
-                    state.heroIsSwatch ->
-                        "This one is a colour swatch, so there's nothing to render. " +
-                            "Photograph it to try it on."
-                    // Naming the missing shot matters: `cloth` reports a render it could
-                    // not do as success with no image, so a vague "add a photo" would let
-                    // the user spend a credit on a guaranteed blank.
-                    state.heroNeededSlot != null -> when (state.heroNeededSlot) {
-                        PhotoSlot.LOWER_BODY ->
-                            "Add a lower-body photo of yourself — trousers need your legs " +
-                                "in frame to render."
-                        PhotoSlot.UPPER_BODY ->
-                            "Add an upper-body photo of yourself and try-on will render " +
-                                "onto it."
-                        else ->
-                            "Add a full-body photo of yourself — this one needs your whole " +
-                                "figure in frame."
-                    }
-                    else -> null
-                },
-                rendering = state.rendering,
-                renderPass = state.renderPass,
-                renderUrl = state.renderUrl,
-                renderNote = state.renderNote,
-                onRender = viewModel::onRenderHero,
-                onWoreIt = viewModel::onWoreIt,
-                onAttachPhoto = neededSlot?.let { { bodyPhotoPicker.launch("image/*") } }
-            )
-
-            else -> DashedPanel(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Nothing to show yet",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Nocturne.Neutral300
+                pick != null -> PickSection(
+                    pick = pick,
+                    canRender = state.heroCanRender,
+                    blockedReason = when {
+                        state.heroIsSwatch ->
+                            "This one is a colour swatch, so there's nothing to render. " +
+                                "Photograph it to try it on."
+                        // Naming the missing shot matters: `cloth` reports a render it could
+                        // not do as success with no image, so a vague "add a photo" would let
+                        // the user spend a credit on a guaranteed blank.
+                        state.heroNeededSlot != null -> when (state.heroNeededSlot) {
+                            PhotoSlot.LOWER_BODY ->
+                                "Add a lower-body photo of yourself — trousers need your legs " +
+                                    "in frame to render."
+                            PhotoSlot.UPPER_BODY ->
+                                "Add an upper-body photo of yourself and try-on will render " +
+                                    "onto it."
+                            else ->
+                                "Add a full-body photo of yourself — this one needs your whole " +
+                                    "figure in frame."
+                        }
+                        else -> null
+                    },
+                    rendering = state.rendering,
+                    renderPass = state.renderPass,
+                    renderUrl = state.renderUrl,
+                    renderNote = state.renderNote,
+                    onRender = viewModel::onRenderHero,
+                    onWoreIt = viewModel::onWoreIt,
+                    onAttachPhoto = neededSlot?.let { { bodyPhotoPicker.launch("image/*") } }
                 )
-                Text(
-                    text = "Add a garment, or wait for the closet to finish seeding.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Nocturne.Neutral600
-                )
+
+                else -> DashedPanel(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Nothing to show yet",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Nocturne.Neutral300
+                    )
+                    Text(
+                        text = "Add a garment, or wait for the closet to finish seeding.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Nocturne.Neutral600
+                    )
+                }
             }
         }
     }
 }
 
+/**
+ * Today's skin: the selfie the app read, and what it read from it, side by side.
+ *
+ * The two belong in one row because they are one fact — this picture produced this reading.
+ * Stacking them would have pushed the pick below the fold, and the whole point of the pick
+ * is that it is visible without scrolling, so the reading is laid out beside the photo at
+ * the height the photo already needed.
+ */
 @Composable
 private fun SkinCard(
     reading: SkinReading?,
+    selfiePath: String?,
     analysing: Boolean,
     onCheckMirror: () -> Unit,
     onRetake: () -> Unit
@@ -180,17 +200,17 @@ private fun SkinCard(
         ) {
             Kicker("Today's skin")
             Text(
-                text = if (reading != null) "YouCam · 1 call" else "optional",
+                text = if (reading != null) "YouCam · 1 call" else "start here",
                 style = MaterialTheme.typography.labelSmall,
                 color = Nocturne.Accent300
             )
         }
 
-        if (reading == null) {
+        if (selfiePath == null) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "No photo yet. The closet works without one — a photo only " +
-                        "sharpens the pick.",
+                    text = "Upload a selfie to begin. It reads your undertone and skin " +
+                        "type, and today's pick is built from it.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = Nocturne.Neutral300
                 )
@@ -198,41 +218,77 @@ private fun SkinCard(
                     onClick = onCheckMirror,
                     enabled = !analysing
                 ) {
-                    Text(if (analysing) "Reading…" else "Pick an image")
+                    Text(if (analysing) "Reading…" else "Upload a selfie")
                 }
             }
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AsyncImage(
+                        model = File(selfiePath),
+                        contentDescription = "Your selfie",
                         modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(reading.swatchBrush())
-                            .border(1.dp, Nocturne.Neutral800, CircleShape)
+                            .size(SELFIE_PREVIEW_DP.dp)
+                            .clip(RadiusMd)
+                            .border(1.dp, Nocturne.Neutral800, RadiusMd),
+                        contentScale = ContentScale.Crop
                     )
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(
-                            text = "${reading.undertone.name.lowercase()
-                                .replaceFirstChar { it.uppercase() }} undertone",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Nocturne.Text
-                        )
-                        Text(
-                            text = "Fitzpatrick ${reading.fitzpatrickNumeral()} · one YouCam call",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Nocturne.Neutral500
-                        )
-                    }
-                }
 
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MetricBar("Redness", (reading.redness * 100).roundToInt())
-                    MetricBar("Dullness", (reading.dullness * 100).roundToInt())
-                    MetricBar("Dark circles", (reading.darkCircles * 100).roundToInt())
+                    if (reading == null) {
+                        // The photo is on file but the reading is not. Say which of the two
+                        // is missing, so a failed call does not read as a failed upload.
+                        Text(
+                            text = if (analysing) {
+                                "Reading your skin…"
+                            } else {
+                                "Selfie saved, but the skin reading didn't come back. " +
+                                    "The pick below still works — it just isn't tuned to " +
+                                    "your colouring."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Nocturne.Neutral400,
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // The reconstructed swatch stays even beside the real photo:
+                                // it is the measured skin colour, not a thumbnail of it.
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(CircleShape)
+                                        .background(reading.swatchBrush())
+                                        .border(1.dp, Nocturne.Neutral800, CircleShape)
+                                )
+                                Column {
+                                    Text(
+                                        text = "${reading.undertone.name.lowercase()
+                                            .replaceFirstChar { it.uppercase() }} undertone",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = Nocturne.Text,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "Fitzpatrick ${reading.fitzpatrickNumeral()}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Nocturne.Neutral500
+                                    )
+                                }
+                            }
+
+                            MetricBar("Redness", (reading.redness * 100).roundToInt())
+                            MetricBar("Dullness", (reading.dullness * 100).roundToInt())
+                            MetricBar("Dark circles", (reading.darkCircles * 100).roundToInt())
+                        }
+                    }
                 }
 
                 TextButton(
@@ -527,3 +583,9 @@ private fun SkinReading.fitzpatrickNumeral(): String = when (fitzpatrick) {
 
 private const val HERO_IMAGE_HEIGHT_DP = 196
 private const val SUPPORTING_IMAGE_HEIGHT_DP = 84
+
+/**
+ * Square, and sized to the three metric bars beside it rather than to the photo itself —
+ * the row is only as tall as the reading needs, so the card is no taller than it was.
+ */
+private const val SELFIE_PREVIEW_DP = 116

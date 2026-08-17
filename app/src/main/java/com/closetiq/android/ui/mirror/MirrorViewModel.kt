@@ -132,6 +132,12 @@ class MirrorViewModel(
 
             profile.setPhoto(slot, path)
 
+            // Reflected in state the moment it is on disk, not only once the reading lands.
+            // The pick is gated on the selfie, and a failed Skin Analysis call does not
+            // refresh — without this, a failed reading would hide the pick behind a photo
+            // the user had already given.
+            _state.update { it.copy(photos = it.photos.with(slot, path)) }
+
             if (slot != PhotoSlot.SELFIE) {
                 _state.update { it.copy(analysing = false) }
                 refresh()
