@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.closetiq.android.AppContainer
+import com.closetiq.android.domain.repository.Utilisation
 import com.closetiq.android.ui.components.AccentBar
 import com.closetiq.android.ui.components.GarmentTile
 import com.closetiq.android.ui.theme.Nocturne
@@ -59,7 +60,7 @@ fun ClosetScreen(
             modifier = Modifier.fillMaxSize()
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                UtilisationHeader(utilisation = utilisation, total = garments.size)
+                UtilisationHeader(utilisation = utilisation)
             }
 
             items(garments, key = { it.id }) { garment ->
@@ -81,9 +82,8 @@ fun ClosetScreen(
  * you already own.
  */
 @Composable
-private fun UtilisationHeader(utilisation: Float, total: Int) {
-    // utilisation is wornCount / total, so multiplying back recovers the count exactly.
-    val wornCount = (utilisation * total).roundToInt()
+private fun UtilisationHeader(utilisation: Utilisation) {
+    val fraction = utilisation.fraction
 
     Column(
         modifier = Modifier
@@ -93,7 +93,7 @@ private fun UtilisationHeader(utilisation: Float, total: Int) {
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
-                text = "${(utilisation * 100).roundToInt()}%",
+                text = "${(fraction * 100).roundToInt()}%",
                 style = MaterialTheme.typography.displaySmall,
                 color = Nocturne.Text
             )
@@ -105,10 +105,11 @@ private fun UtilisationHeader(utilisation: Float, total: Int) {
             )
         }
 
-        AccentBar(fraction = utilisation, height = 6.dp)
+        AccentBar(fraction = fraction, height = 6.dp)
 
         Text(
-            text = "$wornCount of $total items worn in the last 90 days",
+            text = "${utilisation.wornCount} of ${utilisation.activeCount} " +
+                "items worn in the last 90 days",
             style = MaterialTheme.typography.bodySmall,
             color = Nocturne.Neutral600
         )

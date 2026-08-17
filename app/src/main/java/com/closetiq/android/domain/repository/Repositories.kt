@@ -22,11 +22,34 @@ interface WardrobeRepository {
     suspend fun logWear(garmentId: String, at: Long = System.currentTimeMillis())
     suspend fun retire(garmentId: String)
 
-    /** Fraction of the active closet worn in the last [days]. 0f..1f — the headline number. */
-    suspend fun utilisation(days: Int = 90): Float
+    /**
+     * The headline number, as a stream rather than a one-shot read.
+     *
+     * "Wore it" is tapped on the Mirror, so the Closet is not the screen that logged it
+     * and cannot know to go and re-read. Hanging this off the same Room flow the grid
+     * uses means the wear lands in the database and the percentage follows on its own,
+     * whichever screen caused it.
+     */
+    fun observeUtilisation(days: Int = 90): Flow<Utilisation>
 
     /** Populates the demo closet on first launch. Safe to call repeatedly. */
     suspend fun seedIfEmpty()
+}
+
+/**
+ * Both halves of the headline number, carried together.
+ *
+ * The screen used to recover the count by multiplying the fraction back out against the
+ * size of the grid, which only agrees while every garment is active — add an item and
+ * the grid grows a tile that the percentage does not count yet.
+ */
+data class Utilisation(
+    val wornCount: Int,
+    val activeCount: Int
+) {
+    /** 0f..1f. Zero rather than NaN for an empty closet. */
+    val fraction: Float
+        get() = if (activeCount == 0) 0f else wornCount.toFloat() / activeCount
 }
 
 interface SkinRepository {

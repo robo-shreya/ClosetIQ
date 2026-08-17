@@ -12,6 +12,7 @@ import com.closetiq.android.data.local.toDomain
 import com.closetiq.android.domain.model.Category
 import com.closetiq.android.domain.model.Garment
 import com.closetiq.android.domain.model.GarmentStatus
+import com.closetiq.android.domain.repository.Utilisation
 import com.closetiq.android.domain.repository.WardrobeRepository
 import com.closetiq.android.domain.usecase.RankDormantUseCase
 import kotlinx.coroutines.CoroutineScope
@@ -102,12 +103,21 @@ class WardrobeRepositoryImpl(
         garments.retire(garmentId, System.currentTimeMillis())
     }
 
-    override suspend fun utilisation(days: Int): Float {
-        val total = garments.activeCount()
-        if (total == 0) return 0f
-        val since = System.currentTimeMillis() - days * RankDormantUseCase.MILLIS_PER_DAY
-        return garments.wornSinceCount(since).toFloat() / total
-    }
+    /**
+     * Counted in Kotlin off the existing active-garments flow rather than as its own
+     * query, so there is one definition of "active" instead of two that can drift.
+     * The window is measured when each value is emitted, not when collection starts.
+     */
+    override fun observeUtilisation(days: Int): Flow<Utilisation> =
+        observeActiveGarments().map { active ->
+            val since = System.currentTimeMillis() - days * RankDormantUseCase.MILLIS_PER_DAY
+            Utilisation(
+                wornCount = active.count { garment ->
+                    garment.lastWornAt?.let { it >= since } == true
+                },
+                activeCount = active.size
+            )
+        }
 
     override suspend fun seedIfEmpty() {
         if (garments.count() > 0) return
