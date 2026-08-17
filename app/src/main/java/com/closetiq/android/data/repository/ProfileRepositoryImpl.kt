@@ -13,8 +13,4 @@ class ProfileRepositoryImpl(private val store: ProfileStore) : ProfileRepository
     override suspend fun photos(): PersonPhotos = store.photos()
 
     override suspend fun setPhoto(slot: PhotoSlot, path: String) = store.setPhoto(slot, path)
-
-    override fun observeOnboarded(): Flow<Boolean> = store.observeOnboarded()
-
-    override suspend fun markOnboarded() = store.markOnboarded()
 }

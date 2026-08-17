@@ -180,8 +180,8 @@ data class PersonPhotos(
      * [RenderTarget.UPPER_BODY], on the theory that a head-and-shoulders shot carries
      * enough chest to dress. It does not: YouCam rejected exactly that pairing with
      * `error_src_face_too_small`, from the Mirror, on a real device. It also contradicted
-     * what onboarding tells the user — that the selfie reads skin and the body shots are
-     * what try-on renders onto. The selfie now does only the job it is asked for.
+     * what the app tells the user — that the selfie reads skin and the body shots are what
+     * try-on renders onto. The selfie now does only the job it is asked for.
      */
     fun bestFor(target: RenderTarget): String? = when (target) {
         RenderTarget.UPPER_BODY -> upperBody ?: fullBody

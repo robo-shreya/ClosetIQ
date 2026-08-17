@@ -40,7 +40,7 @@ data class AddItemUiState(
     val labelEdited: Boolean = false,
     /** Every picture of the user on file. Kept in sync with the profile, never a copy. */
     val photos: PersonPhotos = PersonPhotos.EMPTY,
-    /** True once a photo has been attached from this screen rather than at onboarding. */
+    /** True once a photo has been attached from this screen rather than from another one. */
     val photoJustAttached: Boolean = false,
     val rendering: Boolean = false,
     val renderUrl: String? = null,
@@ -76,7 +76,7 @@ class AddItemViewModel(
     val state = _state.asStateFlow()
 
     init {
-        // The photo taken during onboarding is the default body for "See it on me", so the
+        // Whatever body shot is already on file is the default for "See it on me", so the
         // user is not asked for a second picture of themselves mid-flow.
         viewModelScope.launch {
             val stored = profile.photos()

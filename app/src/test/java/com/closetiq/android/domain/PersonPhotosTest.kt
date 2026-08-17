@@ -60,7 +60,7 @@ class PersonPhotosTest {
         // This regressed once. The selfie was allowed to stand in for UPPER_BODY, on the
         // theory that a head-and-shoulders shot carries enough chest to dress. YouCam
         // rejected exactly that with error_src_face_too_small, from the Mirror, on a real
-        // device — and it contradicted what onboarding promises the selfie is for.
+        // device — and it contradicted what the app promises the selfie is for.
         RenderTarget.entries.forEach { target ->
             assertNull(
                 "$target must not resolve to the selfie",

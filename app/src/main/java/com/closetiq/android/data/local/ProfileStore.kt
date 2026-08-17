@@ -2,7 +2,6 @@ package com.closetiq.android.data.local
 
 import android.content.Context
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -32,17 +31,10 @@ class ProfileStore(private val context: Context) {
         context.profileDataStore.edit { it[keyFor(slot)] = path }
     }
 
-    fun observeOnboarded(): Flow<Boolean> =
-        context.profileDataStore.data.map { it[ONBOARDED] ?: false }
-
-    suspend fun markOnboarded() {
-        context.profileDataStore.edit { it[ONBOARDED] = true }
-    }
-
     /**
      * The selfie falls back to [LEGACY_PERSON_PHOTO], the single key used before photos
-     * were split by purpose. Anyone already onboarded keeps the picture they attached
-     * rather than being silently asked for it again.
+     * were split by purpose. Anyone who attached one earlier keeps it rather than being
+     * silently asked for it again.
      */
     private fun readPhotos(prefs: Preferences) = PersonPhotos(
         selfie = prefs[keyFor(PhotoSlot.SELFIE)] ?: prefs[LEGACY_PERSON_PHOTO],
@@ -66,7 +58,5 @@ class ProfileStore(private val context: Context) {
 
         /** Pre-split key. Read for the selfie, never written to again. */
         val LEGACY_PERSON_PHOTO = stringPreferencesKey("person_photo_path")
-
-        val ONBOARDED = booleanPreferencesKey("onboarded")
     }
 }

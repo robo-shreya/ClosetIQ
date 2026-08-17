@@ -70,8 +70,9 @@ interface SkinRepository {
 /**
  * The person, as opposed to the wardrobe.
  *
- * Photos are attached once, during onboarding, and reused for every reading and every
- * try-on — the user is never asked mid-flow. Replacing one is a deliberate act.
+ * Each photo is asked for by the screen that needs it — the selfie on the Mirror, a body
+ * shot when a try-on wants one — and then reused for every reading and every render.
+ * Replacing one is a deliberate act.
  *
  * They are kept per purpose rather than as a single image because a selfie and a try-on
  * shot are different photographs: see [PersonPhotos].
@@ -80,9 +81,6 @@ interface ProfileRepository {
     fun observePhotos(): Flow<PersonPhotos>
     suspend fun photos(): PersonPhotos
     suspend fun setPhoto(slot: PhotoSlot, path: String)
-
-    fun observeOnboarded(): Flow<Boolean>
-    suspend fun markOnboarded()
 }
 
 interface TryOnRepository {
