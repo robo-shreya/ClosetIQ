@@ -11,8 +11,12 @@ import com.closetiq.android.data.image.ImageStore
 import com.closetiq.android.domain.engine.PaletteEngine
 import com.closetiq.android.domain.model.Category
 import com.closetiq.android.domain.model.LabColor
+import com.closetiq.android.domain.model.PersonPhotos
+import com.closetiq.android.domain.model.PhotoSlot
 import com.closetiq.android.domain.model.SkinReading
+import com.closetiq.android.domain.repository.ProfileRepository
 import com.closetiq.android.domain.repository.SkinRepository
+import com.closetiq.android.domain.repository.TryOnRepository
 import com.closetiq.android.domain.repository.WardrobeRepository
 import com.closetiq.android.domain.usecase.CheckDuplicateUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,14 +32,34 @@ data class BuyCheckUiState(
     val importing: Boolean = false,
     val checking: Boolean = false,
     val verdict: CheckDuplicateUseCase.Verdict? = null,
+    /** Every picture of the user on file, so the render can pick the right one. */
+    val photos: PersonPhotos = PersonPhotos.EMPTY,
+    val rendering: Boolean = false,
+    val renderUrl: String? = null,
+    val renderNote: String? = null,
     val error: String? = null
 ) {
     val canCheck: Boolean get() = candidateColor != null && !importing && !checking
+
+    /**
+     * The photo this render would use — an upper-body shot for a top, a lower-body one for
+     * trousers. Null when nothing on file covers that region.
+     */
+    val personPhoto: String? get() = photos.bestFor(category.renderTarget)
+
+    val canTryOn: Boolean
+        get() = photoPath != null && personPhoto != null && !importing && !rendering
+
+    /** The slot to ask for when the render is blocked for want of a picture of the user. */
+    val neededSlot: PhotoSlot?
+        get() = if (personPhoto == null) photos.preferredSlotFor(category.renderTarget) else null
 }
 
 class BuyCheckViewModel(
     private val wardrobe: WardrobeRepository,
     private val skin: SkinRepository,
+    private val profile: ProfileRepository,
+    private val tryOn: TryOnRepository,
     private val checkDuplicate: CheckDuplicateUseCase,
     private val imageStore: ImageStore,
     private val colorExtractor: ColorExtractor
@@ -43,6 +67,12 @@ class BuyCheckViewModel(
 
     private val _state = MutableStateFlow(BuyCheckUiState())
     val state = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            _state.update { it.copy(photos = profile.photos()) }
+        }
+    }
 
     /**
      * Colour is extracted the moment the photo lands rather than when the button is
@@ -56,7 +86,14 @@ class BuyCheckViewModel(
             _state.value.photoPath?.let(imageStore::delete)
 
             _state.update {
-                it.copy(importing = true, error = null, verdict = null, photoPath = null)
+                it.copy(
+                    importing = true,
+                    error = null,
+                    verdict = null,
+                    photoPath = null,
+                    renderUrl = null,
+                    renderNote = null
+                )
             }
 
             runCatching {
@@ -75,8 +112,38 @@ class BuyCheckViewModel(
         }
     }
 
+    /**
+     * A body shot, attached here rather than sending the user somewhere else for it. The
+     * try-on prompt is the first time most people will be asked for one.
+     */
+    fun onPersonPhotoPicked(slot: PhotoSlot, uri: Uri) {
+        viewModelScope.launch {
+            _state.update { it.copy(importing = true, error = null) }
+
+            runCatching { imageStore.importFromUri(uri) }
+                .onSuccess { path ->
+                    profile.setPhoto(slot, path)
+                    _state.update {
+                        it.copy(importing = false, photos = it.photos.with(slot, path))
+                    }
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(
+                            importing = false,
+                            error = error.message ?: "Could not read that photo"
+                        )
+                    }
+                }
+        }
+    }
+
+    // A render of a top is not a render of a pair of trousers, so switching category drops
+    // it along with the verdict.
     fun onCategoryChange(category: Category) =
-        _state.update { it.copy(category = category, verdict = null) }
+        _state.update {
+            it.copy(category = category, verdict = null, renderUrl = null, renderNote = null)
+        }
 
     fun onCheck() {
         val color = _state.value.candidateColor ?: return
@@ -102,6 +169,53 @@ class BuyCheckViewModel(
         }
     }
 
+    /**
+     * One call, one credit, only when asked.
+     *
+     * The shop photo is the garment and the stored body shot is the person, which is the
+     * same pairing the Mirror renders — the difference is that nothing here is in the
+     * closet, so this goes straight to [TryOnRepository] instead of through the chained
+     * outfit strategy. There is only ever one garment to put on.
+     */
+    fun onTryOn() {
+        val current = _state.value
+        val garmentPath = current.photoPath ?: return
+
+        val person = current.personPhoto ?: run {
+            _state.update {
+                it.copy(error = "Add a photo of yourself first — this renders onto it.")
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            _state.update { it.copy(rendering = true, error = null, renderNote = null) }
+
+            tryOn.render(
+                personImagePath = person,
+                garmentImagePath = garmentPath,
+                target = current.category.renderTarget
+            )
+                .onSuccess { result ->
+                    _state.update {
+                        it.copy(
+                            rendering = false,
+                            renderUrl = result.imageUrl,
+                            renderNote = result.note
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(
+                            rendering = false,
+                            error = error.message ?: "Could not render the try-on"
+                        )
+                    }
+                }
+        }
+    }
+
     fun dismissError() = _state.update { it.copy(error = null) }
 
     companion object {
@@ -110,6 +224,8 @@ class BuyCheckViewModel(
                 BuyCheckViewModel(
                     wardrobe = container.wardrobeRepository,
                     skin = container.skinRepository,
+                    profile = container.profileRepository,
+                    tryOn = container.tryOnRepository,
                     checkDuplicate = container.checkDuplicate,
                     imageStore = container.imageStore,
                     colorExtractor = container.colorExtractor

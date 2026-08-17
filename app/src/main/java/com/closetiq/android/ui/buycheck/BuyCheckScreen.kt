@@ -33,6 +33,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.closetiq.android.AppContainer
 import com.closetiq.android.domain.model.Garment
+import com.closetiq.android.domain.model.PhotoSlot
 import com.closetiq.android.domain.usecase.CheckDuplicateUseCase
 import com.closetiq.android.domain.usecase.CheckDuplicateUseCase.BuyAdvice
 import com.closetiq.android.domain.usecase.CheckDuplicateUseCase.Verdict
@@ -43,6 +44,7 @@ import com.closetiq.android.ui.components.Footnote
 import com.closetiq.android.ui.components.GarmentTile
 import com.closetiq.android.ui.components.Kicker
 import com.closetiq.android.ui.components.NocturneCard
+import com.closetiq.android.ui.components.NocturneSpinner
 import com.closetiq.android.ui.components.PipScale
 import com.closetiq.android.ui.components.RadiusMd
 import com.closetiq.android.ui.theme.Nocturne
@@ -70,6 +72,15 @@ fun BuyCheckScreen(
     val picker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri -> uri?.let(viewModel::onPhotoPicked) }
+
+    // Bound to the slot the chosen category actually needs, so the prompt below asks for
+    // the one photo that would unblock this render rather than for "a photo".
+    val neededSlot = state.neededSlot
+    val personPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null && neededSlot != null) viewModel.onPersonPhotoPicked(neededSlot, uri)
+    }
 
     Column(
         modifier = Modifier
@@ -169,11 +180,128 @@ fun BuyCheckScreen(
             MatchGrid(verdict.matches)
         }
 
+        // Under the verdict, not above it: the argument about what you already own is the
+        // point of the screen, and seeing the thing on yourself is what you do once you
+        // have read it. Available before the check too — the photo is all it needs.
+        if (photoPath != null) {
+            TryOnSection(
+                canTryOn = state.canTryOn,
+                rendering = state.rendering,
+                renderUrl = state.renderUrl,
+                renderNote = state.renderNote,
+                neededSlot = neededSlot,
+                onTryOn = viewModel::onTryOn,
+                onAttachPhoto = { personPicker.launch("image/*") }
+            )
+        }
+
         if (state.verdict == null) {
             Footnote(
                 "Compares against the colours already in your closet. No API call, " +
                     "no photo leaves the device."
             )
+        }
+    }
+}
+
+/**
+ * "See it on me" for something you do not own yet.
+ *
+ * One call rather than the Mirror's chained outfit: there is a single garment here, and it
+ * is the only thing about the purchase still in question. The button stays a deliberate tap
+ * because it spends a real YouCam credit — running it with every verdict would charge for a
+ * render on every colour compared in a shop.
+ */
+@Composable
+private fun TryOnSection(
+    canTryOn: Boolean,
+    rendering: Boolean,
+    renderUrl: String?,
+    renderNote: String?,
+    /** Non-null when the render is blocked for want of a picture of the user. */
+    neededSlot: PhotoSlot?,
+    onTryOn: () -> Unit,
+    onAttachPhoto: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Kicker("See it on you")
+
+        if (rendering) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RadiusMd)
+                    .border(1.dp, Nocturne.Neutral800, RadiusMd)
+                    .padding(18.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                NocturneSpinner()
+                Text(
+                    text = "One VTO render…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Nocturne.Neutral400
+                )
+            }
+        }
+
+        renderUrl?.let { url ->
+            AsyncImage(
+                model = url,
+                contentDescription = "Try-on render",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RadiusMd)
+                    .border(1.dp, Nocturne.Accent800, RadiusMd),
+                contentScale = ContentScale.FillWidth
+            )
+        }
+
+        // `cloth` can report success with no image when it cannot use the photos it was
+        // given, so the note is what turns a blank frame into an explanation.
+        renderNote?.let { note ->
+            Text(
+                text = note,
+                style = MaterialTheme.typography.bodySmall,
+                color = Nocturne.Neutral600
+            )
+        }
+
+        if (neededSlot != null) {
+            Text(
+                text = when (neededSlot) {
+                    PhotoSlot.LOWER_BODY ->
+                        "Add a lower-body photo of yourself — trousers need your legs in " +
+                            "frame to render."
+                    PhotoSlot.UPPER_BODY ->
+                        "Add an upper-body photo of yourself and try-on will render onto it."
+                    else ->
+                        "Add a full-body photo of yourself — this one needs your whole " +
+                            "figure in frame."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = Nocturne.Neutral600
+            )
+            OutlinedButton(
+                onClick = onAttachPhoto,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp)
+            ) {
+                Text("Add that photo now", color = Nocturne.Text)
+            }
+        } else {
+            OutlinedButton(
+                onClick = onTryOn,
+                enabled = canTryOn,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp)
+            ) {
+                Text(
+                    text = when {
+                        rendering -> "Rendering…"
+                        renderUrl != null -> "Render again"
+                        else -> "See it on me"
+                    },
+                    color = Nocturne.Text
+                )
+            }
         }
     }
 }
