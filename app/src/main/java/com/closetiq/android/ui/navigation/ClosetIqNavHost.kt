@@ -19,7 +19,6 @@ import com.closetiq.android.AppContainer
 import com.closetiq.android.ui.additem.AddItemScreen
 import com.closetiq.android.ui.buycheck.BuyCheckScreen
 import com.closetiq.android.ui.closet.ClosetScreen
-import com.closetiq.android.ui.dormant.DormantQueueScreen
 import com.closetiq.android.ui.mirror.MirrorScreen
 import com.closetiq.android.ui.onboarding.OnboardingScreen
 import com.closetiq.android.ui.theme.Nocturne
@@ -36,15 +35,19 @@ sealed class Screen(
     val title: String
 ) {
     data object Mirror : Screen("mirror", "Mirror", "Start destination", "Mirror")
-    data object Closet : Screen("closet", "Closet", "Everything you own", "Closet")
-    data object Dormant : Screen("dormant", "Dormant", "The forgotten ones", "Dormant")
+
+    /**
+     * The closet is the dormant queue now — one grid, ranked most-forgotten first. Two tabs
+     * over the same twenty garments only made the user choose which order to see them in.
+     */
+    data object Closet : Screen("closet", "Closet", "Ranked by neglect", "Closet")
     data object AddItem : Screen("add", "Add", "Closet", "Add item")
     data object BuyCheck : Screen("buy-check", "Worth it?", "Before you buy", "Worth it?")
 
     companion object {
-        val bottomTabs = listOf(Mirror, Closet, Dormant, BuyCheck)
+        val bottomTabs = listOf(Mirror, Closet, BuyCheck)
 
-        private val all = listOf(Mirror, Closet, Dormant, AddItem, BuyCheck)
+        private val all = listOf(Mirror, Closet, AddItem, BuyCheck)
 
         fun fromRoute(route: String?): Screen = all.firstOrNull { it.route == route } ?: Mirror
     }
@@ -96,7 +99,6 @@ private fun MainShell(container: AppContainer) {
             title = current.title,
             meta = when (current) {
                 Screen.Closet -> "$garmentCount items"
-                Screen.Dormant -> "ranked"
                 else -> null
             },
             onBack = onBack
@@ -116,9 +118,6 @@ private fun MainShell(container: AppContainer) {
                         container = container,
                         onAddItem = { navController.navigate(Screen.AddItem.route) }
                     )
-                }
-                composable(Screen.Dormant.route) {
-                    DormantQueueScreen(container = container)
                 }
                 composable(Screen.AddItem.route) {
                     AddItemScreen(

@@ -37,6 +37,9 @@ import kotlin.math.roundToInt
 /** Clears the floating action button so it never sits on top of the last row. */
 private val GridBottomInset = 96.dp
 
+/** Past this, an item reads as genuinely forgotten and its label takes the accent. */
+private const val OVERDUE_DAYS = 60
+
 @Composable
 fun ClosetScreen(
     container: AppContainer,
@@ -64,7 +67,14 @@ fun ClosetScreen(
             }
 
             items(garments, key = { it.id }) { garment ->
-                GarmentTile(garment = garment)
+                val days = viewModel.daysSince(garment)
+                val overdue = days == null || days > OVERDUE_DAYS
+
+                GarmentTile(
+                    garment = garment,
+                    subtitle = if (days == null) "never worn" else "$days days ago",
+                    subtitleColor = if (overdue) Nocturne.Accent300 else Nocturne.Neutral600
+                )
             }
         }
 
@@ -108,8 +118,10 @@ private fun UtilisationHeader(utilisation: Utilisation) {
         AccentBar(fraction = fraction, height = 6.dp)
 
         Text(
+            // The ranking is stated here rather than in a banner of its own: the grid
+            // below is sorted, and an unexplained order reads as no order at all.
             text = "${utilisation.wornCount} of ${utilisation.activeCount} " +
-                "items worn in the last 90 days",
+                "items worn in the last 90 days · most neglected first",
             style = MaterialTheme.typography.bodySmall,
             color = Nocturne.Neutral600
         )
