@@ -16,7 +16,23 @@ local.properties
 backend/node_modules/
 backend/.env
 
-# Local test photos for backend/probe.js — personal images, keep them out of git
+# Local test photos for backend/probe.js — personal images, keep them out of git.
+# HEIC is here because that is what an iPhone hands you when you AirDrop a photo across.
 backend/*.png
 backend/*.jpg
 backend/*.jpeg
+backend/*.webp
+backend/*.heic
+
+# Kotlin 2.0 build sessions. Created by every build, useful to nobody else.
+.kotlin/
+
+# Packaged builds. /build and app/build are already ignored, but an APK copied out to
+# hand to someone is not.
+*.apk
+*.aab
+
+# Demo capture. A screen recording is tens of megabytes and belongs in the submission,
+# not in git history where it can never be removed.
+*.mp4
+*.mov

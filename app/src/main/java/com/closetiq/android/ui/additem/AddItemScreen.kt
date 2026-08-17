@@ -19,6 +19,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -29,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.closetiq.android.AppContainer
+import com.closetiq.android.domain.model.PhotoSlot
 import com.closetiq.android.ui.components.CategoryPicker
 import com.closetiq.android.ui.components.DashedPanel
 import com.closetiq.android.ui.components.Footnote
@@ -38,6 +40,9 @@ import com.closetiq.android.ui.theme.Nocturne
 import java.io.File
 
 private const val PHOTO_PANEL_HEIGHT_DP = 210
+
+/** Taller than the garment panel — a render is a whole person, not a folded jumper. */
+private const val RENDER_PANEL_HEIGHT_DP = 320
 
 @Composable
 fun AddItemScreen(
@@ -50,6 +55,10 @@ fun AddItemScreen(
     val picker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri -> uri?.let(viewModel::onImagePicked) }
+
+    val personPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri -> uri?.let(viewModel::onPersonPhotoPicked) }
 
     Column(
         modifier = Modifier
@@ -125,6 +134,16 @@ fun AddItemScreen(
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
+
+            // Only while the field still holds the app's guess. Once the user types, the
+            // line would be claiming credit for their words.
+            if (state.garmentColor != null && !state.labelEdited) {
+                Text(
+                    text = "Suggested from the colour in the photo. Overwrite it freely.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Nocturne.Neutral600
+                )
+            }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -134,6 +153,12 @@ fun AddItemScreen(
                 onSelect = viewModel::onCategoryChange
             )
         }
+
+        SeeItOnMe(
+            state = state,
+            onRender = viewModel::onSeeItOnMe,
+            onChoosePersonPhoto = { personPicker.launch("image/*") }
+        )
 
         state.error?.let { message ->
             Text(
@@ -162,5 +187,133 @@ fun AddItemScreen(
             "Inserts immediately as PROCESSING, so the tile appears before any image " +
                 "work finishes."
         )
+    }
+}
+
+/**
+ * "an upper-body photo" — carrying its own article, which is not the same for every slot.
+ * Kept beside its possessive twin so the two cannot drift apart.
+ */
+private fun slotIndefinite(slot: PhotoSlot): String = when (slot) {
+    PhotoSlot.LOWER_BODY -> "a lower-body photo"
+    PhotoSlot.UPPER_BODY -> "an upper-body photo"
+    PhotoSlot.FULL_BODY -> "a full-body photo"
+    PhotoSlot.SELFIE -> "a selfie"
+}
+
+/** "your upper-body photo". */
+private fun slotPossessive(slot: PhotoSlot): String = when (slot) {
+    PhotoSlot.LOWER_BODY -> "your lower-body photo"
+    PhotoSlot.UPPER_BODY -> "your upper-body photo"
+    PhotoSlot.FULL_BODY -> "your full-body photo"
+    PhotoSlot.SELFIE -> "your selfie"
+}
+
+/**
+ * Try-on for the garment being added, before it is saved.
+ *
+ * Separate from the Mirror on purpose: the Mirror answers "what should I wear today",
+ * while this answers "does this thing suit me at all" — a question you ask once, about a
+ * garment that is not in the closet yet.
+ *
+ * Nothing here is persisted. The render is a preview for the person standing in the add
+ * flow, which is also what keeps this off the expiring-URL problem entirely.
+ */
+@Composable
+private fun SeeItOnMe(
+    state: AddItemUiState,
+    onRender: () -> Unit,
+    onChoosePersonPhoto: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Kicker("See it on me")
+
+        when {
+            state.rendering -> DashedPanel(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(RENDER_PANEL_HEIGHT_DP.dp)
+            ) {
+                Text(
+                    text = "Rendering…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Nocturne.Neutral400
+                )
+                Text(
+                    text = "YouCam takes about nine seconds",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Nocturne.Neutral600
+                )
+            }
+
+            state.renderUrl != null -> AsyncImage(
+                model = state.renderUrl,
+                contentDescription = "You wearing ${state.label}",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(RENDER_PANEL_HEIGHT_DP.dp)
+                    .clip(RadiusMd)
+                    .border(1.dp, Nocturne.Accent800, RadiusMd),
+                contentScale = ContentScale.Fit
+            )
+        }
+
+        state.renderNote?.let { note ->
+            Text(
+                text = note,
+                style = MaterialTheme.typography.bodySmall,
+                color = Nocturne.Neutral500
+            )
+        }
+
+        OutlinedButton(
+            onClick = onRender,
+            enabled = state.canRender,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+        ) {
+            Text(
+                text = when {
+                    state.rendering -> "Rendering…"
+                    state.renderUrl != null -> "Render again"
+                    else -> "See it on me"
+                },
+                color = if (state.canRender) Nocturne.Text else Nocturne.Neutral600
+            )
+        }
+
+        // The button disables itself rather than failing on tap, so it has to say why —
+        // and which photo is missing, since a render onto the wrong body region comes back
+        // blank while still reporting success and still costing a credit.
+        Text(
+            text = when {
+                state.localImagePath == null ->
+                    "Attach the garment photo first — there is nothing to put on yet."
+                state.personPhoto == null ->
+                    "This needs ${slotIndefinite(state.targetSlot)} of you. Choose one below " +
+                        "and it's saved for next time."
+                state.photoJustAttached ->
+                    "Saved as ${slotPossessive(state.targetSlot)}. One YouCam call."
+                // Deliberately does not name a slot. The resolved photo may be a fallback —
+                // a full-body shot standing in for an upper-body one — and naming the
+                // wrong picture would read as confidently as naming the right one.
+                else -> "Renders onto your photo from setup. One YouCam call."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = Nocturne.Neutral600
+        )
+
+        TextButton(onClick = onChoosePersonPhoto, enabled = !state.importing) {
+            Text(
+                // Names the slot, because tapping this now writes to the profile. A vague
+                // "use a different photo" would hide which of the four it replaces.
+                text = if (state.personPhoto == null) {
+                    "Choose ${slotIndefinite(state.targetSlot)}"
+                } else {
+                    "Replace ${slotPossessive(state.targetSlot)}"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = Nocturne.Accent200
+            )
+        }
     }
 }

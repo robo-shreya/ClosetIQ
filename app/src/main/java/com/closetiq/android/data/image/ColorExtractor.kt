@@ -30,6 +30,18 @@ class ColorExtractor(private val imageStore: ImageStore) {
     }
 
     /**
+     * The centre-crop read, from a path.
+     *
+     * The add screen needs a colour *before* the garment is saved, so it can propose a
+     * name. Going through the same crop the repository uses on save means the name the
+     * user is offered describes the colour the garment will actually be stored with.
+     */
+    suspend fun fromPathCentreCrop(path: String): LabColor? = withContext(Dispatchers.Default) {
+        val bitmap = imageStore.load(path) ?: return@withContext null
+        fromBitmapCentreCrop(bitmap)
+    }
+
+    /**
      * Without background removal, the frame edge is mostly wall. Cropping to the middle
      * before sampling is the cheap substitute — it is why the add-item screen tells the
      * user to fill the frame.

@@ -2,6 +2,8 @@ package com.closetiq.android.domain.repository
 
 import com.closetiq.android.domain.model.Category
 import com.closetiq.android.domain.model.Garment
+import com.closetiq.android.domain.model.PersonPhotos
+import com.closetiq.android.domain.model.PhotoSlot
 import com.closetiq.android.domain.model.RenderTarget
 import com.closetiq.android.domain.model.SkinReading
 import kotlinx.coroutines.flow.Flow
@@ -68,13 +70,16 @@ interface SkinRepository {
 /**
  * The person, as opposed to the wardrobe.
  *
- * One photo is attached once and reused as the person image for every try-on, so the
- * user is never asked for it again mid-flow. Replacing it is a deliberate act.
+ * Photos are attached once, during onboarding, and reused for every reading and every
+ * try-on — the user is never asked mid-flow. Replacing one is a deliberate act.
+ *
+ * They are kept per purpose rather than as a single image because a selfie and a try-on
+ * shot are different photographs: see [PersonPhotos].
  */
 interface ProfileRepository {
-    fun observePersonPhoto(): Flow<String?>
-    suspend fun personPhoto(): String?
-    suspend fun setPersonPhoto(path: String)
+    fun observePhotos(): Flow<PersonPhotos>
+    suspend fun photos(): PersonPhotos
+    suspend fun setPhoto(slot: PhotoSlot, path: String)
 
     fun observeOnboarded(): Flow<Boolean>
     suspend fun markOnboarded()

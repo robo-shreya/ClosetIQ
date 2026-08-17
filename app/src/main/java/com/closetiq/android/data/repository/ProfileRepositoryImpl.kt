@@ -1,16 +1,18 @@
 package com.closetiq.android.data.repository
 
 import com.closetiq.android.data.local.ProfileStore
+import com.closetiq.android.domain.model.PersonPhotos
+import com.closetiq.android.domain.model.PhotoSlot
 import com.closetiq.android.domain.repository.ProfileRepository
 import kotlinx.coroutines.flow.Flow
 
 class ProfileRepositoryImpl(private val store: ProfileStore) : ProfileRepository {
 
-    override fun observePersonPhoto(): Flow<String?> = store.observePersonPhoto()
+    override fun observePhotos(): Flow<PersonPhotos> = store.observePhotos()
 
-    override suspend fun personPhoto(): String? = store.personPhoto()
+    override suspend fun photos(): PersonPhotos = store.photos()
 
-    override suspend fun setPersonPhoto(path: String) = store.setPersonPhoto(path)
+    override suspend fun setPhoto(slot: PhotoSlot, path: String) = store.setPhoto(slot, path)
 
     override fun observeOnboarded(): Flow<Boolean> = store.observeOnboarded()
 

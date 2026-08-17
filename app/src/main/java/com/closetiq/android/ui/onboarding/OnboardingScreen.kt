@@ -3,15 +3,21 @@ package com.closetiq.android.ui.onboarding
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -20,10 +26,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,6 +44,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import coil.compose.AsyncImage
 import com.closetiq.android.AppContainer
 import com.closetiq.android.data.image.ImageStore
+import com.closetiq.android.domain.model.PersonPhotos
+import com.closetiq.android.domain.model.PhotoSlot
 import com.closetiq.android.domain.repository.ProfileRepository
 import com.closetiq.android.domain.repository.SkinRepository
 import com.closetiq.android.ui.components.DashedPanel
@@ -48,13 +60,19 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 
-private const val PREVIEW_HEIGHT_DP = 260
+private const val SELFIE_PREVIEW_HEIGHT_DP = 240
+private const val BODY_TILE_HEIGHT_DP = 132
 
 data class OnboardingUiState(
-    val photoPath: String? = null,
-    val working: Boolean = false,
+    val photos: PersonPhotos = PersonPhotos.EMPTY,
+    /** Which slot is mid-import, so only that tile shows a spinner. */
+    val busySlot: PhotoSlot? = null,
+    /** True while the selfie is out at Skin Analysis. */
+    val reading: Boolean = false,
     val error: String? = null
-)
+) {
+    val working: Boolean get() = busySlot != null || reading
+}
 
 class OnboardingViewModel(
     private val profile: ProfileRepository,
@@ -65,37 +83,58 @@ class OnboardingViewModel(
     private val _state = MutableStateFlow(OnboardingUiState())
     val state = _state.asStateFlow()
 
-    /**
-     * The photo is saved to the profile before the reading is attempted, and kept even
-     * if the reading fails. A failed skin call should not cost the user the picture —
-     * try-on still needs it.
-     */
-    fun onPhotoPicked(uri: Uri) {
+    init {
+        // Re-entering onboarding should show what is already on file rather than looking
+        // like nothing was ever attached.
         viewModelScope.launch {
-            _state.update { it.copy(working = true, error = null) }
+            val stored = profile.photos()
+            if (stored.hasAny) _state.update { it.copy(photos = stored) }
+        }
+    }
+
+    /**
+     * Every photo is saved to the profile before anything else is attempted, and kept even
+     * if the skin reading fails. A failed skin call should not cost the user the picture —
+     * try-on still needs it.
+     *
+     * Only the selfie is sent for a reading. The body shots are for `cloth` and would be
+     * two wasted YouCam calls each: Skin Analysis needs a face.
+     */
+    fun onPhotoPicked(slot: PhotoSlot, uri: Uri) {
+        viewModelScope.launch {
+            _state.update { it.copy(busySlot = slot, error = null) }
 
             val path = runCatching { imageStore.importFromUri(uri) }.getOrElse { error ->
                 _state.update {
-                    it.copy(working = false, error = error.message ?: "Could not read that photo")
+                    it.copy(
+                        busySlot = null,
+                        error = error.message ?: "Could not read that photo"
+                    )
                 }
                 return@launch
             }
 
-            profile.setPersonPhoto(path)
-            _state.update { it.copy(photoPath = path) }
+            profile.setPhoto(slot, path)
+            _state.update { it.copy(busySlot = null, photos = it.photos.with(slot, path)) }
 
-            skin.captureReading(path)
-                .onSuccess { _state.update { s -> s.copy(working = false) } }
-                .onFailure { error ->
-                    _state.update {
-                        it.copy(
-                            working = false,
-                            error = "Photo saved, but the skin reading failed: " +
-                                (error.message ?: "unknown error")
-                        )
-                    }
-                }
+            if (slot == PhotoSlot.SELFIE) captureReading(path)
         }
+    }
+
+    private suspend fun captureReading(path: String) {
+        _state.update { it.copy(reading = true) }
+
+        skin.captureReading(path)
+            .onSuccess { _state.update { it.copy(reading = false) } }
+            .onFailure { error ->
+                _state.update {
+                    it.copy(
+                        reading = false,
+                        error = "Selfie saved, but the skin reading failed: " +
+                            (error.message ?: "unknown error")
+                    )
+                }
+            }
     }
 
     fun finish(onDone: () -> Unit) {
@@ -119,11 +158,16 @@ class OnboardingViewModel(
 }
 
 /**
- * Asks for one photo, once.
+ * Asks for the photos once, up front.
  *
- * Deliberately skippable. The app's whole premise is that it works without a photo and
- * is only sharper with one — a blocking onboarding gate would contradict that, and would
- * strand anyone who opens the app somewhere they would rather not photograph themselves.
+ * The selfie and the body shots answer different questions, so they are asked for
+ * separately: Skin Analysis needs a face, `cloth` needs the body region it is being asked
+ * to replace. One image cannot be both, and pretending otherwise is why a lower-body
+ * try-on used to come back empty.
+ *
+ * Still deliberately skippable. The app's whole premise is that it works without a photo
+ * and is only sharper with one — a blocking gate would contradict that, and would strand
+ * anyone who opens the app somewhere they would rather not photograph themselves.
  */
 @Composable
 fun OnboardingScreen(
@@ -133,64 +177,77 @@ fun OnboardingScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    // One launcher serves every slot; this remembers which tile asked.
+    var pendingSlot by remember { mutableStateOf(PhotoSlot.SELFIE) }
+
     val picker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri -> uri?.let(viewModel::onPhotoPicked) }
+    ) { uri -> uri?.let { viewModel.onPhotoPicked(pendingSlot, it) } }
+
+    fun pick(slot: PhotoSlot) {
+        pendingSlot = slot
+        picker.launch("image/*")
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
+            .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 32.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Kicker("First, one photo", color = Nocturne.Neutral600)
+        Kicker("First, your photos", color = Nocturne.Neutral600)
         Text(
-            text = "A picture of you",
+            text = "A few pictures of you",
             style = MaterialTheme.typography.headlineMedium,
             color = Nocturne.Text
         )
         Text(
-            text = "Used twice: to read your skin, and as the body every try-on is " +
-                "rendered on. Attach it once and you won't be asked again.",
+            text = "The selfie reads your skin. The body shots are what try-on renders " +
+                "onto — a top needs your upper half in frame, trousers need your lower " +
+                "half. Attach them once and you won't be asked again.",
             style = MaterialTheme.typography.bodyLarge,
             color = Nocturne.Neutral400
         )
 
-        val photoPath = state.photoPath
+        SelfiePanel(state = state, onPick = { pick(PhotoSlot.SELFIE) })
 
-        if (photoPath == null) {
-            DashedPanel(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(PREVIEW_HEIGHT_DP.dp)
-            ) {
-                if (state.working) {
-                    NocturneSpinner(size = 20.dp)
-                } else {
-                    Text(
-                        text = "Head and shoulders, or half body for try-on",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Nocturne.Neutral400
-                    )
-                    Text(
-                        text = "Stays on your device except for the two YouCam calls",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Nocturne.Neutral600
-                    )
-                }
-            }
-        } else {
-            AsyncImage(
-                model = File(photoPath),
-                contentDescription = "Your photo",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(PREVIEW_HEIGHT_DP.dp)
-                    .clip(RadiusMd)
-                    .border(1.dp, Nocturne.Neutral800, RadiusMd),
-                contentScale = ContentScale.Crop
+        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Kicker("For try-on — optional")
+            Text(
+                text = "A full-body shot alone covers everything. The other two only " +
+                    "sharpen it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Nocturne.Neutral600
             )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                BodySlotTile(
+                    label = "Full body",
+                    path = state.photos.fullBody,
+                    busy = state.busySlot == PhotoSlot.FULL_BODY,
+                    enabled = !state.working,
+                    onClick = { pick(PhotoSlot.FULL_BODY) },
+                    modifier = Modifier.weight(1f)
+                )
+                BodySlotTile(
+                    label = "Upper body",
+                    path = state.photos.upperBody,
+                    busy = state.busySlot == PhotoSlot.UPPER_BODY,
+                    enabled = !state.working,
+                    onClick = { pick(PhotoSlot.UPPER_BODY) },
+                    modifier = Modifier.weight(1f)
+                )
+                BodySlotTile(
+                    label = "Lower body",
+                    path = state.photos.lowerBody,
+                    busy = state.busySlot == PhotoSlot.LOWER_BODY,
+                    enabled = !state.working,
+                    onClick = { pick(PhotoSlot.LOWER_BODY) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
 
         state.error?.let { message ->
@@ -198,21 +255,6 @@ fun OnboardingScreen(
                 text = message,
                 style = MaterialTheme.typography.bodySmall,
                 color = Nocturne.Accent300
-            )
-        }
-
-        OutlinedButton(
-            onClick = { picker.launch("image/*") },
-            enabled = !state.working,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp)
-        ) {
-            Text(
-                text = when {
-                    state.working -> "Reading…"
-                    photoPath != null -> "Use a different photo"
-                    else -> "Choose a photo"
-                },
-                color = Nocturne.Text
             )
         }
 
@@ -228,23 +270,147 @@ fun OnboardingScreen(
             ),
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) {
-            Text(if (photoPath != null) "Open my closet" else "Continue")
+            Text(if (state.photos.hasAny) "Open my closet" else "Continue")
         }
 
-        if (photoPath == null) {
+        if (!state.photos.hasAny) {
             TextButton(
                 onClick = { viewModel.finish(onDone) },
                 enabled = !state.working,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {
                 Text(
-                    text = "Skip — the closet works without it",
+                    text = "Skip — the closet works without them",
                     style = MaterialTheme.typography.labelMedium,
                     color = Nocturne.Neutral500
                 )
             }
         }
 
-        Footnote("You can add or replace this any time from the Mirror.")
+        Footnote(
+            "You can replace the selfie from the Mirror, and any body shot from the " +
+                "screen where you add an item."
+        )
+    }
+}
+
+/** The selfie gets the big frame: it is the only one that is close to required. */
+@Composable
+private fun SelfiePanel(state: OnboardingUiState, onPick: () -> Unit) {
+    val selfie = state.photos.selfie
+
+    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Kicker("Selfie — reads your skin")
+
+        if (selfie == null) {
+            DashedPanel(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(SELFIE_PREVIEW_HEIGHT_DP.dp)
+            ) {
+                if (state.busySlot == PhotoSlot.SELFIE || state.reading) {
+                    NocturneSpinner(size = 20.dp)
+                } else {
+                    Text(
+                        text = "Head and shoulders, well lit",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Nocturne.Neutral400
+                    )
+                    Text(
+                        text = "Stays on your device except for the two YouCam calls",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Nocturne.Neutral600
+                    )
+                }
+            }
+        } else {
+            AsyncImage(
+                model = File(selfie),
+                contentDescription = "Your selfie",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(SELFIE_PREVIEW_HEIGHT_DP.dp)
+                    .clip(RadiusMd)
+                    .border(1.dp, Nocturne.Neutral800, RadiusMd),
+                contentScale = ContentScale.Crop
+            )
+        }
+
+        OutlinedButton(
+            onClick = onPick,
+            enabled = !state.working,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp)
+        ) {
+            Text(
+                text = when {
+                    state.reading -> "Reading your skin…"
+                    state.busySlot == PhotoSlot.SELFIE -> "Importing…"
+                    selfie != null -> "Use a different selfie"
+                    else -> "Choose a selfie"
+                },
+                color = Nocturne.Text
+            )
+        }
+    }
+}
+
+/**
+ * One optional body shot. Tapping the tile is the whole interaction — there is no separate
+ * button, because three slots each with their own button is a wall of controls.
+ */
+@Composable
+private fun BodySlotTile(
+    label: String,
+    path: String?,
+    busy: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(BODY_TILE_HEIGHT_DP.dp)
+                .clip(RadiusMd)
+                .background(Nocturne.Field)
+                .border(
+                    width = 1.dp,
+                    // An attached slot is marked with an accent hairline — a line, not a
+                    // flood, which is the one thing Nocturne is strict about.
+                    color = if (path != null) Nocturne.Accent800 else Nocturne.Neutral800,
+                    shape = RadiusMd
+                )
+                .clickable(enabled = enabled, onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            when {
+                busy -> NocturneSpinner(size = 16.dp)
+
+                path != null -> AsyncImage(
+                    model = File(path),
+                    contentDescription = label,
+                    modifier = Modifier.fillMaxSize().clip(RadiusMd),
+                    contentScale = ContentScale.Crop
+                )
+
+                else -> Text(
+                    text = "+",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Nocturne.Neutral600
+                )
+            }
+        }
+
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (path != null) Nocturne.Text else Nocturne.Neutral600,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }

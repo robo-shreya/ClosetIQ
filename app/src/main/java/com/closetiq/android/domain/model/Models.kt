@@ -121,6 +121,90 @@ data class SkinReading(
 }
 
 /**
+ * The pictures of the user, one per purpose.
+ *
+ * A selfie and a try-on shot are not the same photograph and never were. Skin Analysis
+ * wants a close, well-lit face; `cloth` wants a body with the target region actually in
+ * frame. Asking one image to do both is why renders came back empty — a head-and-
+ * shoulders selfie has no legs in it, so a lower-body try-on has nothing to replace.
+ *
+ * Only [SELFIE] is really needed. The rest sharpen try-on and are optional, in keeping
+ * with the app never being blocked on a photo.
+ */
+enum class PhotoSlot {
+    /** Head and shoulders. The one Skin Analysis reads. */
+    SELFIE,
+
+    /** Head to feet. The most useful single try-on shot — it can stand in for any region. */
+    FULL_BODY,
+
+    /** Waist up. */
+    UPPER_BODY,
+
+    /** Waist down. */
+    LOWER_BODY
+}
+
+data class PersonPhotos(
+    val selfie: String? = null,
+    val fullBody: String? = null,
+    val upperBody: String? = null,
+    val lowerBody: String? = null
+) {
+    operator fun get(slot: PhotoSlot): String? = when (slot) {
+        PhotoSlot.SELFIE -> selfie
+        PhotoSlot.FULL_BODY -> fullBody
+        PhotoSlot.UPPER_BODY -> upperBody
+        PhotoSlot.LOWER_BODY -> lowerBody
+    }
+
+    fun with(slot: PhotoSlot, path: String): PersonPhotos = when (slot) {
+        PhotoSlot.SELFIE -> copy(selfie = path)
+        PhotoSlot.FULL_BODY -> copy(fullBody = path)
+        PhotoSlot.UPPER_BODY -> copy(upperBody = path)
+        PhotoSlot.LOWER_BODY -> copy(lowerBody = path)
+    }
+
+    val hasAny: Boolean get() = PhotoSlot.entries.any { this[it] != null }
+
+    /**
+     * The best photo to render a [target] region onto, or null when nothing on file could
+     * plausibly work.
+     *
+     * Returning null matters more than it looks: a lower-body render onto a selfie is a
+     * guaranteed empty result, and `cloth` reports that as *success* with no image. So
+     * falling back to any photo at all would spend a real credit to produce nothing and
+     * no error. Better to say up front which picture is missing.
+     */
+    fun bestFor(target: RenderTarget): String? = when (target) {
+        // A selfie usually carries shoulders and some chest, so it is a fair last resort
+        // here and only here.
+        RenderTarget.UPPER_BODY -> upperBody ?: fullBody ?: selfie
+        RenderTarget.LOWER_BODY -> lowerBody ?: fullBody
+        RenderTarget.FULL_BODY -> fullBody ?: upperBody
+        RenderTarget.SHOES -> fullBody ?: lowerBody
+        RenderTarget.AUTO -> fullBody ?: upperBody ?: selfie
+    }
+
+    /**
+     * The slot [target] would ideally be rendered from.
+     *
+     * Serves two purposes, which are the same question asked from either side: when
+     * [bestFor] returns null this is the photo to ask the user for, and when the user
+     * supplies one this is the slot it belongs in.
+     */
+    fun preferredSlotFor(target: RenderTarget): PhotoSlot = when (target) {
+        RenderTarget.LOWER_BODY -> PhotoSlot.LOWER_BODY
+        RenderTarget.SHOES, RenderTarget.FULL_BODY, RenderTarget.AUTO -> PhotoSlot.FULL_BODY
+        RenderTarget.UPPER_BODY -> PhotoSlot.UPPER_BODY
+    }
+
+    companion object {
+        val EMPTY = PersonPhotos()
+    }
+}
+
+/**
  * The colour palette derived from a skin reading — a set of anchor colours
  * that suit this person. A garment scores well when it sits close to an anchor.
  */

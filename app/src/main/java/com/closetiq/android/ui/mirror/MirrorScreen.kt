@@ -37,6 +37,7 @@ import coil.compose.AsyncImage
 import com.closetiq.android.AppContainer
 import com.closetiq.android.domain.model.LabColor
 import com.closetiq.android.domain.model.OutfitPick
+import com.closetiq.android.domain.model.PhotoSlot
 import com.closetiq.android.domain.model.ScoredGarment
 import com.closetiq.android.domain.model.SkinReading
 import com.closetiq.android.domain.model.Undertone
@@ -68,9 +69,20 @@ fun MirrorScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    // The card above reads skin, so its picker always means "a new selfie". Body shots are
+    // attached during onboarding, or from the add-item screen for a one-off.
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri -> uri?.let(viewModel::onPhotoPicked) }
+    ) { uri -> uri?.let { viewModel.onPhotoPicked(PhotoSlot.SELFIE, it) } }
+
+    // Bound to whatever the hero actually needs, so the blocked message below is
+    // something the user can act on here rather than a dead end.
+    val neededSlot = state.heroNeededSlot
+    val bodyPhotoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null && neededSlot != null) viewModel.onPhotoPicked(neededSlot, uri)
+    }
 
     val pick = state.pick
 
@@ -107,15 +119,28 @@ fun MirrorScreen(
                     state.heroIsSwatch ->
                         "This one is a colour swatch, so there's nothing to render. " +
                             "Photograph it to try it on."
-                    state.personPhoto == null ->
-                        "Add a picture of you above and try-on will render onto it."
+                    // Naming the missing shot matters: `cloth` reports a render it could
+                    // not do as success with no image, so a vague "add a photo" would let
+                    // the user spend a credit on a guaranteed blank.
+                    state.heroNeededSlot != null -> when (state.heroNeededSlot) {
+                        PhotoSlot.LOWER_BODY ->
+                            "Add a lower-body photo of yourself — trousers need your legs " +
+                                "in frame to render."
+                        PhotoSlot.UPPER_BODY ->
+                            "Add an upper-body photo of yourself and try-on will render " +
+                                "onto it."
+                        else ->
+                            "Add a full-body photo of yourself — this one needs your whole " +
+                                "figure in frame."
+                    }
                     else -> null
                 },
                 rendering = state.rendering,
                 renderUrl = state.renderUrl,
                 renderNote = state.renderNote,
                 onRender = viewModel::onRenderHero,
-                onWoreIt = viewModel::onWoreIt
+                onWoreIt = viewModel::onWoreIt,
+                onAttachPhoto = neededSlot?.let { { bodyPhotoPicker.launch("image/*") } }
             )
 
             else -> DashedPanel(modifier = Modifier.fillMaxWidth()) {
@@ -234,7 +259,9 @@ private fun PickSection(
     renderUrl: String?,
     renderNote: String?,
     onRender: () -> Unit,
-    onWoreIt: () -> Unit
+    onWoreIt: () -> Unit,
+    /** Null unless the render is blocked for want of a photo the user could attach now. */
+    onAttachPhoto: (() -> Unit)? = null
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         HeroCard(hero = pick.hero, reason = pick.reason)
@@ -296,6 +323,16 @@ private fun PickSection(
                 style = MaterialTheme.typography.bodySmall,
                 color = Nocturne.Neutral600
             )
+        }
+
+        onAttachPhoto?.let { attach ->
+            TextButton(onClick = attach) {
+                Text(
+                    text = "Add that photo now",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Nocturne.Accent200
+                )
+            }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

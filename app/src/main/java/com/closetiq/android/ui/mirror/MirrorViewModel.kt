@@ -9,6 +9,9 @@ import com.closetiq.android.AppContainer
 import com.closetiq.android.data.image.ImageStore
 import com.closetiq.android.data.repository.RenderStrategy
 import com.closetiq.android.domain.model.OutfitPick
+import com.closetiq.android.domain.model.PersonPhotos
+import com.closetiq.android.domain.model.PhotoSlot
+import com.closetiq.android.domain.model.RenderTarget
 import com.closetiq.android.domain.model.SkinReading
 import com.closetiq.android.domain.repository.ProfileRepository
 import com.closetiq.android.domain.repository.SkinRepository
@@ -29,22 +32,41 @@ data class MirrorUiState(
     val renderUrl: String? = null,
     val renderNote: String? = null,
     val rendering: Boolean = false,
-    /** The stored photo of the user, reused as the body for every render. */
-    val personPhoto: String? = null,
+    /** Every picture of the user on file, resolved per render target. */
+    val photos: PersonPhotos = PersonPhotos.EMPTY,
     val analysing: Boolean = false,
     val error: String? = null
 ) {
+    /** Which body region the hero garment would be rendered onto. */
+    val heroTarget: RenderTarget?
+        get() = pick?.hero?.garment?.category?.renderTarget
+
+    /**
+     * The photo this render would actually use — an upper-body shot for a top, a
+     * lower-body one for trousers. Null when no photo on file could contain that region.
+     */
+    val heroPersonPhoto: String?
+        get() = heroTarget?.let { photos.bestFor(it) }
+
     /**
      * Virtual try-on needs a picture of the garment, and seeded swatches have none.
      * Surfaced as state so the button can explain itself instead of failing on tap.
      */
     val heroCanRender: Boolean
-        get() = personPhoto != null &&
+        get() = heroPersonPhoto != null &&
             pick?.hero?.garment?.let { it.cutoutPath ?: it.imagePath } != null
 
     /** Distinguishes "no picture of you" from "this garment is only a swatch". */
     val heroIsSwatch: Boolean
         get() = pick?.hero?.garment?.let { it.cutoutPath ?: it.imagePath } == null
+
+    /** The slot to ask for when the hero cannot be rendered for want of a photo. */
+    val heroNeededSlot: PhotoSlot?
+        get() = if (heroPersonPhoto == null) {
+            heroTarget?.let { photos.preferredSlotFor(it) }
+        } else {
+            null
+        }
 }
 
 class MirrorViewModel(
@@ -70,7 +92,7 @@ class MirrorViewModel(
 
             val reading = skin.currentFreshReading()
             val garments = wardrobe.observeActiveGarments().first()
-            val photo = profile.personPhoto()
+            val photos = profile.photos()
 
             // Scoring is local and free, so it runs on every refresh whether or not
             // there is a skin reading. The app is useful without a selfie; it is just
@@ -80,7 +102,7 @@ class MirrorViewModel(
             _state.update {
                 it.copy(
                     loading = false,
-                    personPhoto = photo,
+                    photos = photos,
                     reading = reading,
                     readingIsFresh = reading != null,
                     pick = pick.getOrNull(),
@@ -90,8 +112,13 @@ class MirrorViewModel(
         }
     }
 
-    /** One photo, used for both the skin reading and the try-on render. */
-    fun onPhotoPicked(uri: Uri) {
+    /**
+     * Attach or replace one of the user's photos.
+     *
+     * Only a selfie is worth sending to Skin Analysis — it needs a face. A body shot is
+     * stored for `cloth` and nothing else, which keeps adding one free.
+     */
+    fun onPhotoPicked(slot: PhotoSlot, uri: Uri) {
         viewModelScope.launch {
             _state.update { it.copy(analysing = true, error = null) }
 
@@ -101,7 +128,13 @@ class MirrorViewModel(
                     return@launch
                 }
 
-            profile.setPersonPhoto(path)
+            profile.setPhoto(slot, path)
+
+            if (slot != PhotoSlot.SELFIE) {
+                _state.update { it.copy(analysing = false) }
+                refresh()
+                return@launch
+            }
 
             skin.captureReading(path)
                 .onSuccess {
@@ -116,10 +149,19 @@ class MirrorViewModel(
 
     /** One render per session — only the hero item, only when the user asks. */
     fun onRenderHero() {
-        val pick = _state.value.pick ?: return
-        val person = _state.value.personPhoto ?: run {
+        val current = _state.value
+        val pick = current.pick ?: return
+
+        // Resolved for the hero's own body region, so a pair of trousers is never rendered
+        // onto a head-and-shoulders selfie.
+        val person = current.heroPersonPhoto ?: run {
+            val needed = when (current.heroNeededSlot) {
+                PhotoSlot.LOWER_BODY -> "a lower-body photo"
+                PhotoSlot.UPPER_BODY -> "an upper-body photo"
+                else -> "a full-body photo"
+            }
             _state.update {
-                it.copy(error = "Add a picture of you first — try-on renders onto it.")
+                it.copy(error = "Add $needed of you first — this garment renders onto it.")
             }
             return
         }
