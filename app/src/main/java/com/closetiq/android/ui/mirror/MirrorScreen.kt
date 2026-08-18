@@ -104,7 +104,8 @@ fun MirrorScreen(
             selfiePath = state.photos.selfie,
             analysing = state.analysing,
             onCheckMirror = { photoPicker.launch("image/*") },
-            onRetake = { photoPicker.launch("image/*") }
+            onRetake = { photoPicker.launch("image/*") },
+            onRemove = viewModel::onRemoveSelfie
         )
 
         state.error?.let { message ->
@@ -214,7 +215,8 @@ private fun SkinCard(
     selfiePath: String?,
     analysing: Boolean,
     onCheckMirror: () -> Unit,
-    onRetake: () -> Unit
+    onRetake: () -> Unit,
+    onRemove: () -> Unit
 ) {
     NocturneCard(
         modifier = Modifier.fillMaxWidth(),
@@ -228,11 +230,36 @@ private fun SkinCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Kicker("Today's skin")
-            Text(
-                text = if (reading != null) "YouCam · 1 call" else "start here",
-                style = MaterialTheme.typography.labelSmall,
-                color = Nocturne.Accent300
-            )
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (reading != null) "YouCam · 1 call" else "start here",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Nocturne.Accent300
+                )
+
+                // Only once there is a photo to remove. Sitting on the card rather than
+                // beside "Retake" because it undoes the card itself, not the reading.
+                if (selfiePath != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .border(1.dp, Nocturne.Neutral700, CircleShape)
+                            .clickable(enabled = !analysing, onClick = onRemove),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "×",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Nocturne.Neutral400
+                        )
+                    }
+                }
+            }
         }
 
         if (selfiePath == null) {

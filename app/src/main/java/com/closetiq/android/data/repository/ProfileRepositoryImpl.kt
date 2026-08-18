@@ -13,4 +13,6 @@ class ProfileRepositoryImpl(private val store: ProfileStore) : ProfileRepository
     override suspend fun photos(): PersonPhotos = store.photos()
 
     override suspend fun setPhoto(slot: PhotoSlot, path: String) = store.setPhoto(slot, path)
+
+    override suspend fun clearPhoto(slot: PhotoSlot) = store.clearPhoto(slot)
 }

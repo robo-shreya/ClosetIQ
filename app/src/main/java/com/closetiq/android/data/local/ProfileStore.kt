@@ -32,6 +32,17 @@ class ProfileStore(private val context: Context) {
     }
 
     /**
+     * Forgets a slot. The selfie also clears [LEGACY_PERSON_PHOTO] — that key is still read
+     * as a fallback, so leaving it behind would resurrect the photo the user just removed.
+     */
+    suspend fun clearPhoto(slot: PhotoSlot) {
+        context.profileDataStore.edit { prefs ->
+            prefs.remove(keyFor(slot))
+            if (slot == PhotoSlot.SELFIE) prefs.remove(LEGACY_PERSON_PHOTO)
+        }
+    }
+
+    /**
      * The selfie falls back to [LEGACY_PERSON_PHOTO], the single key used before photos
      * were split by purpose. Anyone who attached one earlier keeps it rather than being
      * silently asked for it again.

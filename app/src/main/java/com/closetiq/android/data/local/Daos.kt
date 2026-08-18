@@ -92,4 +92,7 @@ interface SkinReadingDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(reading: SkinReadingEntity)
+
+    @Query("DELETE FROM skin_readings")
+    suspend fun deleteAll()
 }

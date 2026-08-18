@@ -86,6 +86,9 @@ interface SkinRepository {
      * Both YouCam calls read the same image — the user takes one photo, not two.
      */
     suspend fun captureReading(selfiePath: String): Result<SkinReading>
+
+    /** Forgets every stored reading, so the next selfie starts from nothing. */
+    suspend fun clearReadings()
 }
 
 /**
@@ -102,6 +105,7 @@ interface ProfileRepository {
     fun observePhotos(): Flow<PersonPhotos>
     suspend fun photos(): PersonPhotos
     suspend fun setPhoto(slot: PhotoSlot, path: String)
+    suspend fun clearPhoto(slot: PhotoSlot)
 }
 
 interface TryOnRepository {

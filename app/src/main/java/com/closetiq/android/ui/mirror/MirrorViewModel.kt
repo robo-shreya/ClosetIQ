@@ -155,6 +155,33 @@ class MirrorViewModel(
         }
     }
 
+    /**
+     * Puts the Mirror back to the state a fresh install opens in: no selfie, no reading,
+     * nothing suggested.
+     *
+     * The reading goes with the photo rather than being left behind. It was measured from
+     * that selfie, it outlives it by five days, and a reading with no photo under it is
+     * exactly the stale-but-plausible state the app should never show.
+     */
+    fun onRemoveSelfie() {
+        viewModelScope.launch {
+            profile.clearPhoto(PhotoSlot.SELFIE)
+            skin.clearReadings()
+
+            _state.update {
+                it.copy(
+                    photos = it.photos.with(PhotoSlot.SELFIE, null),
+                    reading = null,
+                    readingIsFresh = false,
+                    pick = null,
+                    renderUrl = null,
+                    renderNote = null,
+                    error = null
+                )
+            }
+        }
+    }
+
     /** One render per session — only the hero item, only when the user asks. */
     fun onRenderHero() {
         val current = _state.value

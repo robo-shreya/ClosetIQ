@@ -158,7 +158,8 @@ data class PersonPhotos(
         PhotoSlot.LOWER_BODY -> lowerBody
     }
 
-    fun with(slot: PhotoSlot, path: String): PersonPhotos = when (slot) {
+    /** [path] may be null, which is how a slot is emptied again. */
+    fun with(slot: PhotoSlot, path: String?): PersonPhotos = when (slot) {
         PhotoSlot.SELFIE -> copy(selfie = path)
         PhotoSlot.FULL_BODY -> copy(fullBody = path)
         PhotoSlot.UPPER_BODY -> copy(upperBody = path)

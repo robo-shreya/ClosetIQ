@@ -74,6 +74,8 @@ class SkinRepositoryImpl(
         }
     }
 
+    override suspend fun clearReadings() = readings.deleteAll()
+
     companion object {
         const val FRESH_FOR_DAYS = 5L
     }
