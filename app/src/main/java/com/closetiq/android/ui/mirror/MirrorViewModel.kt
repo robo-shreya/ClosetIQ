@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 data class MirrorUiState(
@@ -87,6 +88,15 @@ class MirrorViewModel(
     private val _state = MutableStateFlow(MirrorUiState())
     val state = _state.asStateFlow()
 
+    /**
+     * The skin call in flight, if any.
+     *
+     * Held so removing the selfie can cancel it. Without that, a call started before the
+     * removal lands its reading afterwards — which is how a reading with no selfie behind
+     * it came to exist in the first place.
+     */
+    private var analysisJob: Job? = null
+
     init {
         refresh()
     }
@@ -95,9 +105,17 @@ class MirrorViewModel(
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
 
-            val reading = skin.currentFreshReading()
             val garments = wardrobe.observeActiveGarments().first()
             val photos = profile.photos()
+
+            // The photo and the reading live in different stores — DataStore and Room — so
+            // they can disagree, and a reading outlives its selfie by five days. A reading
+            // with no selfie behind it put a full outfit on screen underneath a card still
+            // asking for a photo. Treat that pairing as invalid and clear it, so the ghost
+            // cannot come back on the next launch either.
+            val stored = skin.currentFreshReading()
+            val reading = if (photos.selfie != null) stored else null
+            if (stored != null && photos.selfie == null) skin.clearReadings()
 
             // Nothing is suggested until YouCam has answered. Scoring itself works without
             // a reading — it falls back to a neutral palette — but a pick that appears the
@@ -127,7 +145,7 @@ class MirrorViewModel(
     fun onPhotoPicked(slot: PhotoSlot, uri: Uri) {
         val isSelfie = slot == PhotoSlot.SELFIE
 
-        viewModelScope.launch {
+        val job = viewModelScope.launch {
             // Only the selfie is "analysing" — a body shot is a file copy, and saying
             // otherwise put "Reading your skin…" on screen while nothing was being read.
             _state.update {
@@ -165,6 +183,8 @@ class MirrorViewModel(
                     }
                 }
         }
+
+        if (isSelfie) analysisJob = job
     }
 
     /**
@@ -181,6 +201,10 @@ class MirrorViewModel(
             profile.clearPhoto(slot)
 
             if (slot == PhotoSlot.SELFIE) {
+                // Cancel first, then clear: a call still running would otherwise insert its
+                // reading after the wipe and leave the screen exactly as it was.
+                analysisJob?.cancel()
+                analysisJob = null
                 skin.clearReadings()
                 _state.update {
                     it.copy(
