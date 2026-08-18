@@ -7,7 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Every fixture here is a real Lab value lifted straight out of SeedCloset, paired with
+ * Every fixture here is a real Lab value measured from a garment photograph, paired with
  * the name a person actually gave that garment.
  *
  * That choice is deliberate. Twice on this project a green test sat next to a wrong

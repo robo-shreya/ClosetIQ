@@ -42,6 +42,8 @@ data class GarmentSheetState(
     val rendering: Boolean = false,
     val renderUrl: String? = null,
     val renderNote: String? = null,
+    /** True once delete has been asked for and is waiting to be confirmed. */
+    val confirmingDelete: Boolean = false,
     val error: String? = null
 )
 
@@ -222,6 +224,36 @@ class ClosetViewModel(
                         it?.copy(
                             rendering = false,
                             error = error.message ?: "Could not render the try-on"
+                        )
+                    }
+                }
+        }
+    }
+
+    // ---- delete ----
+
+    fun onDeleteRequested() = _sheet.update { it?.copy(confirmingDelete = true, error = null) }
+
+    fun onDeleteCancelled() = _sheet.update { it?.copy(confirmingDelete = false) }
+
+    /**
+     * Deletes the garment and closes the sheet.
+     *
+     * Confirmed in the sheet rather than done on the first tap, because this one cannot be
+     * undone: the row and the photograph both go, and the photograph may be the only copy
+     * if it was taken through the app.
+     */
+    fun onDeleteConfirmed() {
+        val current = _sheet.value ?: return
+
+        viewModelScope.launch {
+            runCatching { wardrobe.delete(current.garmentId) }
+                .onSuccess { _sheet.value = null }
+                .onFailure { error ->
+                    _sheet.update {
+                        it?.copy(
+                            confirmingDelete = false,
+                            error = error.message ?: "Could not delete this"
                         )
                     }
                 }

@@ -36,6 +36,9 @@ interface WardrobeRepository {
     suspend fun logWear(garmentId: String, at: Long = System.currentTimeMillis())
     suspend fun retire(garmentId: String)
 
+    /** Removes the garment and its photograph outright. Not undoable. */
+    suspend fun delete(garmentId: String)
+
     /**
      * The headline number, as a stream rather than a one-shot read.
      *
@@ -46,8 +49,14 @@ interface WardrobeRepository {
      */
     fun observeUtilisation(days: Int = 90): Flow<Utilisation>
 
-    /** Populates the demo closet on first launch. Safe to call repeatedly. */
-    suspend fun seedIfEmpty()
+    /**
+     * Clears out the demo closet earlier versions seeded on first launch.
+     *
+     * Nothing is seeded any more — the closet starts empty and holds only what the user
+     * photographs. Anything added by hand is left alone: only rows marked as seeds go,
+     * which is what that column was kept for.
+     */
+    suspend fun removeSeededGarments()
 }
 
 /**

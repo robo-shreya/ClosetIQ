@@ -49,6 +49,18 @@ interface GarmentDao {
     @Query("UPDATE garments SET retiredAt = :at WHERE id = :id")
     suspend fun retire(id: String, at: Long)
 
+    /**
+     * Gone, rather than retired. Retiring is for something you still own but no longer
+     * wear; this is for something that should never have been in the closet. The wear log
+     * follows it out on the foreign key's cascade.
+     */
+    @Query("DELETE FROM garments WHERE id = :id")
+    suspend fun delete(id: String)
+
+    /** Leftovers from the demo closet earlier versions installed on first launch. */
+    @Query("DELETE FROM garments WHERE isSeed = 1")
+    suspend fun deleteSeeded(): Int
+
     @Query("SELECT COUNT(*) FROM garments WHERE retiredAt IS NULL AND status = 'READY'")
     suspend fun activeCount(): Int
 

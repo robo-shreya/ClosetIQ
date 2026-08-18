@@ -2,6 +2,7 @@ package com.closetiq.android.ui.closet
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -71,6 +72,9 @@ fun GarmentSheet(
     onGarmentPhotoPicked: (android.net.Uri) -> Unit,
     onPersonPhotoPicked: (PhotoSlot, android.net.Uri) -> Unit,
     onTryOn: () -> Unit,
+    onDeleteRequested: () -> Unit,
+    onDeleteCancelled: () -> Unit,
+    onDeleteConfirmed: () -> Unit,
     onDismissError: () -> Unit
 ) {
     val garmentPicker = rememberLauncherForActivityResult(
@@ -199,6 +203,13 @@ fun GarmentSheet(
                 onAttachPhoto = { personPicker.launch("image/*") }
             )
 
+            DeleteRow(
+                confirming = sheet.confirmingDelete,
+                onRequest = onDeleteRequested,
+                onCancel = onDeleteCancelled,
+                onConfirm = onDeleteConfirmed
+            )
+
             sheet.error?.let { message ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -258,6 +269,59 @@ private fun SheetHeader(garment: Garment, onDismiss: () -> Unit) {
                 style = MaterialTheme.typography.titleMedium,
                 color = Nocturne.Neutral400
             )
+        }
+    }
+}
+
+/**
+ * Delete, behind one confirmation.
+ *
+ * Sits apart from the other actions and stays quiet until asked: everything else in this
+ * sheet is reversible by doing it again, and this is the one control that is not. The
+ * confirmation is inline rather than a second dialog stacked over the first, which on a
+ * phone reads as the app having lost its place.
+ */
+@Composable
+private fun DeleteRow(
+    confirming: Boolean,
+    onRequest: () -> Unit,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    if (!confirming) {
+        TextButton(
+            onClick = onRequest,
+            contentPadding = PaddingValues(0.dp)
+        ) {
+            Text(
+                text = "Delete from closet",
+                style = MaterialTheme.typography.labelMedium,
+                color = Nocturne.Neutral500
+            )
+        }
+        return
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "Delete this for good? The photograph goes with it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Nocturne.Accent200
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(
+                onClick = onCancel,
+                modifier = Modifier.weight(1f).heightIn(min = 44.dp)
+            ) {
+                Text("Keep it", color = Nocturne.Text)
+            }
+            OutlinedButton(
+                onClick = onConfirm,
+                border = BorderStroke(1.dp, Nocturne.Accent700),
+                modifier = Modifier.weight(1f).heightIn(min = 44.dp)
+            ) {
+                Text("Delete", color = Nocturne.Accent200)
+            }
         }
     }
 }

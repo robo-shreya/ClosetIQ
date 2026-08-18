@@ -68,6 +68,19 @@ fun ClosetScreen(
                 UtilisationHeader(utilisation = utilisation)
             }
 
+            // The closet ships empty, so the first thing anyone sees here is nothing at
+            // all. Saying where the button is beats an empty grid that looks broken.
+            if (garments.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        text = "Nothing in your closet yet. Photograph something with the " +
+                            "+ button and it will appear here.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Nocturne.Neutral600
+                    )
+                }
+            }
+
             items(garments, key = { it.id }) { garment ->
                 val days = viewModel.daysSince(garment)
                 val overdue = days == null || days > OVERDUE_DAYS
@@ -108,6 +121,9 @@ fun ClosetScreen(
                 onGarmentPhotoPicked = viewModel::onGarmentPhotoPicked,
                 onPersonPhotoPicked = viewModel::onPersonPhotoPicked,
                 onTryOn = { viewModel.onTryOn(garment) },
+                onDeleteRequested = viewModel::onDeleteRequested,
+                onDeleteCancelled = viewModel::onDeleteCancelled,
+                onDeleteConfirmed = viewModel::onDeleteConfirmed,
                 onDismissError = viewModel::dismissSheetError
             )
         }

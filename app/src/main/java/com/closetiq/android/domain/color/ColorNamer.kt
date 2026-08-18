@@ -9,7 +9,7 @@ import com.closetiq.android.domain.model.LabColor
  *
  * Pure Kotlin, in `domain`, so the whole table is unit-testable without an emulator.
  *
- * The bands were calibrated against the 21 hand-named seed garments in SeedCloset —
+ * The bands were calibrated against 21 hand-named garment photographs —
  * those labels are a person's own vocabulary for colours the app already stores as Lab,
  * which makes them the only honest fixture available. Fourteen of the twenty-one come
  * back with the same word a human chose; the rest land on a near synonym.

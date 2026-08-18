@@ -6,7 +6,6 @@ import com.closetiq.android.data.image.ColorExtractor
 import com.closetiq.android.data.image.ImageStore
 import com.closetiq.android.data.local.ClosetDatabase
 import com.closetiq.android.data.local.GarmentEntity
-import com.closetiq.android.data.local.SeedCloset
 import com.closetiq.android.data.local.WearLogEntity
 import com.closetiq.android.data.local.toDomain
 import com.closetiq.android.domain.model.Category
@@ -118,6 +117,18 @@ class WardrobeRepositoryImpl(
     }
 
     /**
+     * The row goes first and the file after it. That order matters: a failed file delete
+     * leaves one orphaned image, while a failed row delete would have left a garment in the
+     * closet pointing at a photograph that no longer exists.
+     */
+    override suspend fun delete(garmentId: String) {
+        val existing = garments.getById(garmentId)
+        garments.delete(garmentId)
+        existing?.imagePath?.let(imageStore::delete)
+        existing?.cutoutPath?.let(imageStore::delete)
+    }
+
+    /**
      * Counted in Kotlin off the existing active-garments flow rather than as its own
      * query, so there is one definition of "active" instead of two that can drift.
      * The window is measured when each value is emitted, not when collection starts.
@@ -133,25 +144,9 @@ class WardrobeRepositoryImpl(
             )
         }
 
-    override suspend fun seedIfEmpty() {
-        if (garments.count() > 0) return
-        Log.i(TAG, "seeding demo closet")
-
-        val now = System.currentTimeMillis()
-        val seeded = SeedCloset.entities(now)
-
-        // Copy the bundled photos into app storage first. An asset has no file path, and
-        // both the colour extractor and the try-on upload need one — so without this a
-        // seeded garment could never be rendered.
-        val withPhotos = seeded.map { garment ->
-            val asset = SeedCloset.assetFor(garment.id) ?: return@map garment
-            garment.copy(imagePath = imageStore.importFromAsset(asset))
-        }
-
-        db.withTransaction {
-            garments.insertAll(withPhotos)
-            wearLog.insertAll(SeedCloset.wearLog(now))
-        }
+    override suspend fun removeSeededGarments() {
+        val removed = garments.deleteSeeded()
+        if (removed > 0) Log.i(TAG, "removed $removed seeded garments")
     }
 
     private companion object {

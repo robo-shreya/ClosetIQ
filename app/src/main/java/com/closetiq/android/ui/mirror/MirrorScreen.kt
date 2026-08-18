@@ -161,7 +161,8 @@ fun MirrorScreen(
                         color = Nocturne.Neutral300
                     )
                     Text(
-                        text = "Add a garment, or wait for the closet to finish seeding.",
+                        text = "Photograph something you own and it will start picking " +
+                            "from it.",
                         style = MaterialTheme.typography.bodySmall,
                         color = Nocturne.Neutral600
                     )
