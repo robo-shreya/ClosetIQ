@@ -358,7 +358,7 @@ private fun SkinCard(
                         // is missing, so a failed call does not read as a failed upload.
                         Text(
                             text = if (analysing) {
-                                "Reading your skin…"
+                                "Sent to YouCam…"
                             } else {
                                 "Selfie saved, but the skin reading didn't come back. " +
                                     "The pick below still works — it just isn't tuned to " +
