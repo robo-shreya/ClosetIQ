@@ -25,12 +25,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -38,6 +42,7 @@ import coil.compose.AsyncImage
 import com.closetiq.android.AppContainer
 import com.closetiq.android.domain.model.LabColor
 import com.closetiq.android.domain.model.OutfitPick
+import com.closetiq.android.domain.model.PersonPhotos
 import com.closetiq.android.domain.model.PhotoSlot
 import com.closetiq.android.domain.model.ScoredGarment
 import com.closetiq.android.domain.model.SkinReading
@@ -81,6 +86,12 @@ fun MirrorScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { viewModel.onPhotoPicked(PhotoSlot.SELFIE, it) } }
 
+    // One launcher serves all three body slots; this remembers which tile asked.
+    var pendingSlot by remember { mutableStateOf(PhotoSlot.FULL_BODY) }
+    val bodySlotPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri -> uri?.let { viewModel.onPhotoPicked(pendingSlot, it) } }
+
     // Bound to whatever the hero actually needs, so the blocked message below is
     // something the user can act on here rather than a dead end.
     val neededSlot = state.heroNeededSlot
@@ -105,7 +116,17 @@ fun MirrorScreen(
             analysing = state.analysing,
             onCheckMirror = { photoPicker.launch("image/*") },
             onRetake = { photoPicker.launch("image/*") },
-            onRemove = viewModel::onRemoveSelfie
+            onRemove = { viewModel.onRemovePhoto(PhotoSlot.SELFIE) }
+        )
+
+        BodyPhotosSection(
+            photos = state.photos,
+            busy = state.analysing || state.attaching,
+            onPick = { slot ->
+                pendingSlot = slot
+                bodySlotPicker.launch("image/*")
+            },
+            onRemove = viewModel::onRemovePhoto
         )
 
         state.error?.let { message ->
@@ -117,7 +138,11 @@ fun MirrorScreen(
         // be built on a neutral palette and then quietly rearrange itself when the real one
         // lands, which reads as the app changing its mind.
         when {
-            state.analysing || (state.loading && state.photos.selfie != null) ->
+            // `loading` counts only before the first reading arrives; once there is one, a
+            // refresh shows the small spinner inside the section instead of throwing the
+            // whole pick away and saying "reading your skin" again.
+            state.analysing ||
+                (state.loading && state.photos.selfie != null && state.reading == null) ->
                 AnalysingPanel()
 
             state.reading == null && state.photos.selfie != null ->
@@ -194,6 +219,143 @@ fun MirrorScreen(
  * is that it is visible without scrolling, so the reading is laid out beside the photo at
  * the height the photo already needed.
  */
+/**
+ * The three pictures try-on renders onto, asked for here rather than anywhere else.
+ *
+ * They are not the selfie and never were: Skin Analysis wants a face, `cloth` wants the
+ * body region it is being asked to dress. Kept small and optional — the pick works without
+ * any of them, and only "See it on me" is blocked when the matching one is missing.
+ */
+@Composable
+private fun BodyPhotosSection(
+    photos: PersonPhotos,
+    busy: Boolean,
+    onPick: (PhotoSlot) -> Unit,
+    onRemove: (PhotoSlot) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Kicker("For try-on")
+            Text(
+                text = "optional",
+                style = MaterialTheme.typography.labelSmall,
+                color = Nocturne.Neutral600
+            )
+        }
+
+        Text(
+            text = "A full-body shot alone covers everything. The other two only sharpen it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Nocturne.Neutral600
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            BodySlotTile(
+                label = "Full body",
+                path = photos.fullBody,
+                enabled = !busy,
+                onClick = { onPick(PhotoSlot.FULL_BODY) },
+                onRemove = { onRemove(PhotoSlot.FULL_BODY) },
+                modifier = Modifier.weight(1f)
+            )
+            BodySlotTile(
+                label = "Upper body",
+                path = photos.upperBody,
+                enabled = !busy,
+                onClick = { onPick(PhotoSlot.UPPER_BODY) },
+                onRemove = { onRemove(PhotoSlot.UPPER_BODY) },
+                modifier = Modifier.weight(1f)
+            )
+            BodySlotTile(
+                label = "Lower body",
+                path = photos.lowerBody,
+                enabled = !busy,
+                onClick = { onPick(PhotoSlot.LOWER_BODY) },
+                onRemove = { onRemove(PhotoSlot.LOWER_BODY) },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+/**
+ * One body shot. Tapping the tile is the whole interaction — an attached one takes an
+ * accent hairline and a small × of its own, so removing it never means going looking for
+ * the control somewhere else.
+ */
+@Composable
+private fun BodySlotTile(
+    label: String,
+    path: String?,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(BODY_TILE_HEIGHT_DP.dp)
+                .clip(RadiusMd)
+                .background(Nocturne.Field)
+                .border(
+                    width = 1.dp,
+                    color = if (path != null) Nocturne.Accent800 else Nocturne.Neutral800,
+                    shape = RadiusMd
+                )
+                .clickable(enabled = enabled, onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            if (path == null) {
+                Text(
+                    text = "+",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Nocturne.Neutral600
+                )
+            } else {
+                AsyncImage(
+                    model = File(path),
+                    contentDescription = label,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(5.dp)
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(Nocturne.Bg)
+                        .border(1.dp, Nocturne.Neutral700, CircleShape)
+                        .clickable(enabled = enabled, onClick = onRemove),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "×",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Nocturne.Neutral300
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (path != null) Nocturne.Text else Nocturne.Neutral600,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
 /**
  * What stands where the pick will be, while YouCam is still looking at the selfie.
  *
@@ -708,3 +870,6 @@ private const val SUPPORTING_IMAGE_HEIGHT_DP = 84
  * the row is only as tall as the reading needs, so the card is no taller than it was.
  */
 private const val SELFIE_PREVIEW_DP = 116
+
+/** Three across the width, so each stays a thumbnail rather than a panel. */
+private const val BODY_TILE_HEIGHT_DP = 96

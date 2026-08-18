@@ -36,7 +36,10 @@ data class MirrorUiState(
     val renderPass: Pair<Int, Int>? = null,
     /** Every picture of the user on file, resolved per render target. */
     val photos: PersonPhotos = PersonPhotos.EMPTY,
+    /** True only while the selfie is out at Skin Analysis. */
     val analysing: Boolean = false,
+    /** True while a body shot is being copied in — no API call is involved. */
+    val attaching: Boolean = false,
     val error: String? = null
 ) {
     /** Which body region the hero garment would be rendered onto. */
@@ -122,12 +125,20 @@ class MirrorViewModel(
      * stored for `cloth` and nothing else, which keeps adding one free.
      */
     fun onPhotoPicked(slot: PhotoSlot, uri: Uri) {
+        val isSelfie = slot == PhotoSlot.SELFIE
+
         viewModelScope.launch {
-            _state.update { it.copy(analysing = true, error = null) }
+            // Only the selfie is "analysing" — a body shot is a file copy, and saying
+            // otherwise put "Reading your skin…" on screen while nothing was being read.
+            _state.update {
+                it.copy(analysing = isSelfie, attaching = !isSelfie, error = null)
+            }
 
             val path = runCatching { imageStore.importFromUri(uri) }
                 .getOrElse { error ->
-                    _state.update { it.copy(analysing = false, error = describe(error)) }
+                    _state.update {
+                        it.copy(analysing = false, attaching = false, error = describe(error))
+                    }
                     return@launch
                 }
 
@@ -137,9 +148,8 @@ class MirrorViewModel(
             // to the tap. What waits is the pick, which needs the analysis under it.
             _state.update { it.copy(photos = it.photos.with(slot, path)) }
 
-            if (slot != PhotoSlot.SELFIE) {
-                _state.update { it.copy(analysing = false) }
-                refresh()
+            if (!isSelfie) {
+                _state.update { it.copy(attaching = false) }
                 return@launch
             }
 
@@ -158,28 +168,33 @@ class MirrorViewModel(
     }
 
     /**
-     * Puts the Mirror back to the state a fresh install opens in: no selfie, no reading,
-     * nothing suggested.
+     * Forgets one of the user's photos.
      *
-     * The reading goes with the photo rather than being left behind. It was measured from
-     * that selfie, it outlives it by five days, and a reading with no photo under it is
-     * exactly the stale-but-plausible state the app should never show.
+     * Removing the selfie takes the reading with it and puts the Mirror back to the state a
+     * fresh install opens in. The reading was measured from that selfie and outlives it by
+     * five days, and a reading with no photo under it is exactly the stale-but-plausible
+     * state this screen should never show. A body shot carries nothing with it — it is only
+     * ever a surface for try-on to render onto.
      */
-    fun onRemoveSelfie() {
+    fun onRemovePhoto(slot: PhotoSlot) {
         viewModelScope.launch {
-            profile.clearPhoto(PhotoSlot.SELFIE)
-            skin.clearReadings()
+            profile.clearPhoto(slot)
 
-            _state.update {
-                it.copy(
-                    photos = it.photos.with(PhotoSlot.SELFIE, null),
-                    reading = null,
-                    readingIsFresh = false,
-                    pick = null,
-                    renderUrl = null,
-                    renderNote = null,
-                    error = null
-                )
+            if (slot == PhotoSlot.SELFIE) {
+                skin.clearReadings()
+                _state.update {
+                    it.copy(
+                        photos = it.photos.with(slot, null),
+                        reading = null,
+                        readingIsFresh = false,
+                        pick = null,
+                        renderUrl = null,
+                        renderNote = null,
+                        error = null
+                    )
+                }
+            } else {
+                _state.update { it.copy(photos = it.photos.with(slot, null), error = null) }
             }
         }
     }
