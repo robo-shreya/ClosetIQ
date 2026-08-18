@@ -5,6 +5,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -114,7 +115,10 @@ fun MirrorScreen(
         // so a failed Skin Analysis call still leaves a usable app: the photo is on file,
         // scoring runs locally, and the pick is simply not sharpened by a reading.
         if (state.photos.selfie != null) {
-            SectionLabel("The pick")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SectionLabel("The pick", modifier = Modifier.weight(1f))
+                ShuffleButton(onClick = viewModel::onShuffle)
+            }
 
             when {
                 state.loading -> Box(
@@ -180,6 +184,30 @@ fun MirrorScreen(
  * is that it is visible without scrolling, so the reading is laid out beside the photo at
  * the height the photo already needed.
  */
+/**
+ * Another outfit, on demand.
+ *
+ * Sits on the section label rather than beside "Wore it" because it is not an action on the
+ * outfit shown — it replaces it. Kept small and unaccented for the same reason: the ranked
+ * pick is still the app's answer, and this is the way past it.
+ */
+@Composable
+private fun ShuffleButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RadiusMd)
+            .border(1.dp, Nocturne.Neutral800, RadiusMd)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = "Shuffle",
+            style = MaterialTheme.typography.labelMedium,
+            color = Nocturne.Neutral300
+        )
+    }
+}
+
 @Composable
 private fun SkinCard(
     reading: SkinReading?,

@@ -206,6 +206,36 @@ class MirrorViewModel(
         }
     }
 
+    /**
+     * Another outfit, at random.
+     *
+     * Rerolled up to [SHUFFLE_ATTEMPTS] times if it comes back as the outfit already on
+     * screen. On a small closet a uniform draw repeats often — with two tops and two pairs
+     * of trousers, one in four shuffles is the same outfit — and a button that visibly does
+     * nothing reads as broken rather than as coincidence.
+     */
+    fun onShuffle() {
+        viewModelScope.launch {
+            val garments = wardrobe.observeActiveGarments().first()
+            val reading = _state.value.reading
+            val current = _state.value.pick
+
+            var next: OutfitPick? = null
+            repeat(SHUFFLE_ATTEMPTS) {
+                if (next == null || next.sameOutfitAs(current)) {
+                    next = runCatching { getTodaysPick.shuffled(garments, reading) }.getOrNull()
+                }
+            }
+
+            // The render belongs to the outfit that produced it, so it goes with the outfit.
+            next?.let { pick ->
+                _state.update {
+                    it.copy(pick = pick, renderUrl = null, renderNote = null, error = null)
+                }
+            }
+        }
+    }
+
     fun onWoreIt() {
         val heroId = _state.value.pick?.hero?.garment?.id ?: return
         viewModelScope.launch {
@@ -215,6 +245,14 @@ class MirrorViewModel(
     }
 
     fun dismissError() = _state.update { it.copy(error = null) }
+
+    /** Same garments, whatever order they came out in. */
+    private fun OutfitPick.sameOutfitAs(other: OutfitPick?): Boolean {
+        if (other == null) return false
+        fun ids(pick: OutfitPick) =
+            (listOf(pick.hero) + pick.supporting).map { it.garment.id }.toSet()
+        return ids(this) == ids(other)
+    }
 
     /**
      * Until the domain TODOs are written, scoring throws NotImplementedError. Saying so
@@ -226,6 +264,9 @@ class MirrorViewModel(
     }
 
     companion object {
+        /** Enough to get off a repeat on a small closet, few enough to stay instant. */
+        private const val SHUFFLE_ATTEMPTS = 5
+
         fun factory(container: AppContainer) = viewModelFactory {
             initializer {
                 MirrorViewModel(
