@@ -107,13 +107,22 @@ class ChainedRenderStrategy(
 
         var personPath = personImagePath
         var lastUrl: String? = null
+        var lastError: Throwable? = null
         val skipped = mutableListOf<String>()
 
         passes.forEachIndexed { index, garment ->
             onProgress(index + 1, passes.size)
 
-            val outcome = renderOne(personPath, garment)
-            val url = outcome.getOrElse { error -> return Result.failure(error) }
+            // A layer that errors is dropped, not fatal. `cloth` fails a single generation
+            // now and then — `error_editing_failed` on a person image it had accepted
+            // seconds earlier — and chaining multiplies the exposure: four passes are four
+            // chances to hit it. Aborting threw away the layers that had already rendered
+            // and showed an error instead of the outfit those credits had already bought.
+            val url = renderOne(personPath, garment).getOrElse { error ->
+                lastError = error
+                skipped += garment.label
+                return@forEachIndexed
+            }
 
             if (url == null) {
                 // A pass that produced nothing is not fatal — the passes before it are
@@ -136,11 +145,15 @@ class ChainedRenderStrategy(
             if (saved != null) personPath = saved
         }
 
+        // Nothing rendered at all, and something went wrong doing it: report the failure
+        // rather than a blank success, so the actual API error reaches the screen.
+        if (lastUrl == null) lastError?.let { return Result.failure(it) }
+
         val note = when {
             lastUrl == null -> "Try-on produced no image for any layer of this outfit."
             skipped.isEmpty() -> null
             else -> "Rendered without ${skipped.joinToString(" and ")} — " +
-                "YouCam returned no image for those layers."
+                "YouCam couldn't render those layers. Tap again to retry them."
         }
 
         return Result.success(RenderResult(imageUrl = lastUrl, note = note))
