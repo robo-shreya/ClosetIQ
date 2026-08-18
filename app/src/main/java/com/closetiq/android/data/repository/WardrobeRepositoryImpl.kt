@@ -92,6 +92,20 @@ class WardrobeRepositoryImpl(
         }
     }
 
+    override suspend fun rename(garmentId: String, label: String) {
+        garments.rename(garmentId, label)
+    }
+
+    /**
+     * Same shape as [addGarment]: the row is updated immediately and the colour follows in
+     * the background, so the tile shows the new photograph at once and greys out only while
+     * the colour catches up.
+     */
+    override suspend fun replacePhoto(garmentId: String, imagePath: String) {
+        garments.updatePhoto(garmentId, imagePath, GarmentStatus.PROCESSING.name)
+        scope.launch { resolveColor(garmentId, imagePath) }
+    }
+
     override suspend fun logWear(garmentId: String, at: Long) {
         db.withTransaction {
             garments.markWorn(garmentId, at)

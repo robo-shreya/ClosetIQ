@@ -2,6 +2,7 @@ package com.closetiq.android.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -61,7 +62,9 @@ fun GarmentTile(
     garment: Garment,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
-    subtitleColor: Color = Nocturne.Neutral600
+    subtitleColor: Color = Nocturne.Neutral600,
+    /** Null where a tile is only something to look at, as in the buy check's match grid. */
+    onClick: (() -> Unit)? = null
 ) {
     val processing = garment.status == GarmentStatus.PROCESSING
 
@@ -70,6 +73,9 @@ fun GarmentTile(
             .clip(RadiusMd)
             .background(Nocturne.Surface)
             .border(1.dp, Nocturne.Neutral800, RadiusMd)
+            // After the clip, so the ripple follows the rounded corner rather than
+            // flooding the square the tile is drawn inside.
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
     ) {
         Box(
             modifier = Modifier

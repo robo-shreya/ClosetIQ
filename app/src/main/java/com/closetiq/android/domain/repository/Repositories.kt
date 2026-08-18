@@ -21,6 +21,18 @@ interface WardrobeRepository {
     /** Inserts immediately with status = PROCESSING, then resolves colour in the background. */
     suspend fun addGarment(label: String, category: Category, imagePath: String): String
 
+    suspend fun rename(garmentId: String, label: String)
+
+    /**
+     * Replaces the photograph of a garment already in the closet.
+     *
+     * Colour is re-extracted from the new picture rather than kept, because the colour is
+     * what every score is computed from — a garment photographed again in better light is
+     * a different input to the palette engine, and keeping the old value would leave the
+     * closet ranking on a photo that is no longer there.
+     */
+    suspend fun replacePhoto(garmentId: String, imagePath: String)
+
     suspend fun logWear(garmentId: String, at: Long = System.currentTimeMillis())
     suspend fun retire(garmentId: String)
 

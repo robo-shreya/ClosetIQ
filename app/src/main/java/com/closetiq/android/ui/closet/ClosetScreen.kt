@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +49,7 @@ fun ClosetScreen(
 ) {
     val garments by viewModel.garments.collectAsStateWithLifecycle()
     val utilisation by viewModel.utilisation.collectAsStateWithLifecycle()
+    val sheet by viewModel.sheet.collectAsStateWithLifecycle()
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyVerticalGrid(
@@ -73,7 +75,8 @@ fun ClosetScreen(
                 GarmentTile(
                     garment = garment,
                     subtitle = if (days == null) "never worn" else "$days days ago",
-                    subtitleColor = if (overdue) Nocturne.Accent300 else Nocturne.Neutral600
+                    subtitleColor = if (overdue) Nocturne.Accent300 else Nocturne.Neutral600,
+                    onClick = { viewModel.onGarmentOpened(garment) }
                 )
             }
         }
@@ -84,6 +87,30 @@ fun ClosetScreen(
                 .align(Alignment.BottomEnd)
                 .padding(end = 20.dp, bottom = 24.dp)
         )
+    }
+
+    // Resolved against the live list rather than held in the sheet state, so a rename or a
+    // new photograph lands in the open sheet as soon as Room emits it. A garment that
+    // disappears from the closet while open closes the sheet with it.
+    sheet?.let { open ->
+        val garment = garments.firstOrNull { it.id == open.garmentId }
+
+        if (garment == null) {
+            // Closing is a side effect, so it runs after composition rather than during it.
+            LaunchedEffect(open.garmentId) { viewModel.onSheetDismissed() }
+        } else {
+            GarmentSheet(
+                garment = garment,
+                sheet = open,
+                onDismiss = viewModel::onSheetDismissed,
+                onLabelChange = viewModel::onDraftLabelChange,
+                onRename = viewModel::onRenameConfirmed,
+                onGarmentPhotoPicked = viewModel::onGarmentPhotoPicked,
+                onPersonPhotoPicked = viewModel::onPersonPhotoPicked,
+                onTryOn = { viewModel.onTryOn(garment) },
+                onDismissError = viewModel::dismissSheetError
+            )
+        }
     }
 }
 

@@ -33,6 +33,16 @@ interface GarmentDao {
     @Query("UPDATE garments SET status = :status WHERE id = :id")
     suspend fun updateStatus(id: String, status: String)
 
+    @Query("UPDATE garments SET label = :label WHERE id = :id")
+    suspend fun rename(id: String, label: String)
+
+    /**
+     * A new photograph of the same garment. The cutout is cleared along with it — it was
+     * derived from the old picture, and a stale cutout is what try-on would have uploaded.
+     */
+    @Query("UPDATE garments SET imagePath = :imagePath, cutoutPath = NULL, status = :status WHERE id = :id")
+    suspend fun updatePhoto(id: String, imagePath: String, status: String)
+
     @Query("UPDATE garments SET lastWornAt = :at, wearCount = wearCount + 1 WHERE id = :id")
     suspend fun markWorn(id: String, at: Long)
 
