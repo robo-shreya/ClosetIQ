@@ -26,9 +26,12 @@ class PersonPhotosTest {
     )
 
     @Test
-    fun `an exact slot always wins`() {
-        assertEquals("upper.jpg", full.bestFor(RenderTarget.UPPER_BODY))
-        assertEquals("lower.jpg", full.bestFor(RenderTarget.LOWER_BODY))
+    fun `the full body shot wins even over the exact crop`() {
+        // `cloth` detects a pose before it dresses anything, and a waist-down crop has no
+        // head, shoulders or arms to detect — it came back error_pose on a real device.
+        // The whole figure works for every region, so it is preferred wherever it exists.
+        assertEquals("full.jpg", full.bestFor(RenderTarget.UPPER_BODY))
+        assertEquals("full.jpg", full.bestFor(RenderTarget.LOWER_BODY))
         assertEquals("full.jpg", full.bestFor(RenderTarget.FULL_BODY))
     }
 
@@ -49,7 +52,7 @@ class PersonPhotosTest {
         val asFilmed = PersonPhotos(selfie = "selfie.jpg", lowerBody = "lower.jpg")
 
         assertNull(asFilmed.bestFor(RenderTarget.UPPER_BODY))
-        assertEquals(PhotoSlot.UPPER_BODY, asFilmed.preferredSlotFor(RenderTarget.UPPER_BODY))
+        assertEquals(PhotoSlot.FULL_BODY, asFilmed.preferredSlotFor(RenderTarget.UPPER_BODY))
         assertEquals("lower.jpg", asFilmed.bestFor(RenderTarget.LOWER_BODY))
     }
 
@@ -95,11 +98,11 @@ class PersonPhotosTest {
     }
 
     @Test
-    fun `the preferred slot names the photo a target wants`() {
+    fun `the preferred slot is always the full body shot`() {
         // Read one way it is "which photo is missing", read the other it is "where does a
         // photo the user just supplied belong". Both callers need the same answer.
-        assertEquals(PhotoSlot.LOWER_BODY, full.preferredSlotFor(RenderTarget.LOWER_BODY))
-        assertEquals(PhotoSlot.UPPER_BODY, full.preferredSlotFor(RenderTarget.UPPER_BODY))
+        assertEquals(PhotoSlot.FULL_BODY, full.preferredSlotFor(RenderTarget.LOWER_BODY))
+        assertEquals(PhotoSlot.FULL_BODY, full.preferredSlotFor(RenderTarget.UPPER_BODY))
         assertEquals(PhotoSlot.FULL_BODY, full.preferredSlotFor(RenderTarget.SHOES))
         assertEquals(PhotoSlot.FULL_BODY, full.preferredSlotFor(RenderTarget.FULL_BODY))
         assertEquals(PhotoSlot.FULL_BODY, full.preferredSlotFor(RenderTarget.AUTO))

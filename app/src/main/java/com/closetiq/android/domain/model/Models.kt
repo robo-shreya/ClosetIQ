@@ -177,6 +177,13 @@ data class PersonPhotos(
      * falling back to any photo at all would spend a real credit to produce nothing and
      * no error. Better to say up front which picture is missing.
      *
+     * **The full-body shot wins even when the exact crop exists.** `cloth` does not simply
+     * paste a garment onto a region — it detects a human pose first, and answers
+     * `error_pose` when it cannot find one. A waist-down crop has no head, no shoulders and
+     * no arms, so it fails that step however well it frames the legs. The whole figure is
+     * the most reliable input for every target, and the crops are kept only as a fallback
+     * for someone who has not attached one.
+     *
      * **The selfie is never a render source.** It was briefly allowed to stand in for
      * [RenderTarget.UPPER_BODY], on the theory that a head-and-shoulders shot carries
      * enough chest to dress. It does not: YouCam rejected exactly that pairing with
@@ -185,25 +192,21 @@ data class PersonPhotos(
      * try-on renders onto. The selfie now does only the job it is asked for.
      */
     fun bestFor(target: RenderTarget): String? = when (target) {
-        RenderTarget.UPPER_BODY -> upperBody ?: fullBody
-        RenderTarget.LOWER_BODY -> lowerBody ?: fullBody
+        RenderTarget.UPPER_BODY -> fullBody ?: upperBody
+        RenderTarget.LOWER_BODY -> fullBody ?: lowerBody
         RenderTarget.FULL_BODY -> fullBody ?: upperBody
         RenderTarget.SHOES -> fullBody ?: lowerBody
         RenderTarget.AUTO -> fullBody ?: upperBody
     }
 
     /**
-     * The slot [target] would ideally be rendered from.
+     * The slot to ask for when [bestFor] has nothing to offer.
      *
-     * Serves two purposes, which are the same question asked from either side: when
-     * [bestFor] returns null this is the photo to ask the user for, and when the user
-     * supplies one this is the slot it belongs in.
+     * Always the full-body shot, whatever the target. It is the one photo that satisfies
+     * `cloth`'s pose detection for every region, so asking for a matching crop instead
+     * would send the user off to fetch a picture that fails the same way.
      */
-    fun preferredSlotFor(target: RenderTarget): PhotoSlot = when (target) {
-        RenderTarget.LOWER_BODY -> PhotoSlot.LOWER_BODY
-        RenderTarget.SHOES, RenderTarget.FULL_BODY, RenderTarget.AUTO -> PhotoSlot.FULL_BODY
-        RenderTarget.UPPER_BODY -> PhotoSlot.UPPER_BODY
-    }
+    fun preferredSlotFor(target: RenderTarget): PhotoSlot = PhotoSlot.FULL_BODY
 
     companion object {
         val EMPTY = PersonPhotos()
