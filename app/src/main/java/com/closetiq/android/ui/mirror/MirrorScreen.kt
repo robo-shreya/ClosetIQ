@@ -112,65 +112,74 @@ fun MirrorScreen(
             ErrorNote(message = message, onDismiss = viewModel::dismissError)
         }
 
-        // No selfie, no suggestion. The gate is the selfie rather than the reading itself,
-        // so a failed Skin Analysis call still leaves a usable app: the photo is on file,
-        // scoring runs locally, and the pick is simply not sharpened by a reading.
-        if (state.photos.selfie != null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SectionLabel("The pick", modifier = Modifier.weight(1f))
-                ShuffleButton(onClick = viewModel::onShuffle)
-            }
+        // Nothing is suggested until the selfie has come back from YouCam. The reading is
+        // the gate, not the photo: a pick shown while the analysis is still in flight would
+        // be built on a neutral palette and then quietly rearrange itself when the real one
+        // lands, which reads as the app changing its mind.
+        when {
+            state.analysing || (state.loading && state.photos.selfie != null) ->
+                AnalysingPanel()
 
-            when {
-                state.loading -> Box(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                    contentAlignment = Alignment.Center
-                ) { NocturneSpinner(size = 20.dp) }
+            state.reading == null && state.photos.selfie != null ->
+                NoReadingPanel(onRetry = { photoPicker.launch("image/*") })
 
-                pick != null -> PickSection(
-                    pick = pick,
-                    canRender = state.heroCanRender,
-                    blockedReason = when {
-                        state.heroIsSwatch ->
-                            "This one is a colour swatch, so there's nothing to render. " +
-                                "Photograph it to try it on."
-                        // Naming the missing shot matters: `cloth` reports a render it could
-                        // not do as success with no image, so a vague "add a photo" would let
-                        // the user spend a credit on a guaranteed blank.
-                        state.heroNeededSlot != null -> when (state.heroNeededSlot) {
-                            PhotoSlot.LOWER_BODY ->
-                                "Add a lower-body photo of yourself — trousers need your legs " +
-                                    "in frame to render."
-                            PhotoSlot.UPPER_BODY ->
-                                "Add an upper-body photo of yourself and try-on will render " +
-                                    "onto it."
-                            else ->
-                                "Add a full-body photo of yourself — this one needs your whole " +
-                                    "figure in frame."
-                        }
-                        else -> null
-                    },
-                    rendering = state.rendering,
-                    renderPass = state.renderPass,
-                    renderUrl = state.renderUrl,
-                    renderNote = state.renderNote,
-                    onRender = viewModel::onRenderHero,
-                    onWoreIt = viewModel::onWoreIt,
-                    onAttachPhoto = neededSlot?.let { { bodyPhotoPicker.launch("image/*") } }
-                )
+            state.reading != null -> {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SectionLabel("The pick", modifier = Modifier.weight(1f))
+                    ShuffleButton(onClick = viewModel::onShuffle)
+                }
 
-                else -> DashedPanel(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "Nothing to show yet",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = Nocturne.Neutral300
+                when {
+                    state.loading -> Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center
+                    ) { NocturneSpinner(size = 20.dp) }
+
+                    pick != null -> PickSection(
+                        pick = pick,
+                        canRender = state.heroCanRender,
+                        blockedReason = when {
+                            state.heroIsSwatch ->
+                                "This one is a colour swatch, so there's nothing to render. " +
+                                    "Photograph it to try it on."
+                            // Naming the missing shot matters: `cloth` reports a render it could
+                            // not do as success with no image, so a vague "add a photo" would let
+                            // the user spend a credit on a guaranteed blank.
+                            state.heroNeededSlot != null -> when (state.heroNeededSlot) {
+                                PhotoSlot.LOWER_BODY ->
+                                    "Add a lower-body photo of yourself — trousers need your legs " +
+                                        "in frame to render."
+                                PhotoSlot.UPPER_BODY ->
+                                    "Add an upper-body photo of yourself and try-on will render " +
+                                        "onto it."
+                                else ->
+                                    "Add a full-body photo of yourself — this one needs your whole " +
+                                        "figure in frame."
+                            }
+                            else -> null
+                        },
+                        rendering = state.rendering,
+                        renderPass = state.renderPass,
+                        renderUrl = state.renderUrl,
+                        renderNote = state.renderNote,
+                        onRender = viewModel::onRenderHero,
+                        onWoreIt = viewModel::onWoreIt,
+                        onAttachPhoto = neededSlot?.let { { bodyPhotoPicker.launch("image/*") } }
                     )
-                    Text(
-                        text = "Photograph something you own and it will start picking " +
-                            "from it.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Nocturne.Neutral600
-                    )
+
+                    else -> DashedPanel(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "Nothing to show yet",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Nocturne.Neutral300
+                        )
+                        Text(
+                            text = "Photograph something you own and it will start picking " +
+                                "from it.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Nocturne.Neutral600
+                        )
+                    }
                 }
             }
         }
@@ -185,6 +194,60 @@ fun MirrorScreen(
  * is that it is visible without scrolling, so the reading is laid out beside the photo at
  * the height the photo already needed.
  */
+/**
+ * What stands where the pick will be, while YouCam is still looking at the selfie.
+ *
+ * Deliberately the same height and shape as nothing at all — the point is that the screen
+ * says "not yet" rather than showing an answer it is about to revise.
+ */
+@Composable
+private fun AnalysingPanel() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RadiusMd)
+            .border(1.dp, Nocturne.Neutral800, RadiusMd)
+            .padding(20.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        NocturneSpinner()
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                text = "Reading your skin…",
+                style = MaterialTheme.typography.titleSmall,
+                color = Nocturne.Neutral300
+            )
+            Text(
+                text = "Today's pick is built from the result, so it waits for it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Nocturne.Neutral600
+            )
+        }
+    }
+}
+
+/** The selfie is on file but the reading is not, so there is nothing to build a pick on. */
+@Composable
+private fun NoReadingPanel(onRetry: () -> Unit) {
+    DashedPanel(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "No reading yet",
+            style = MaterialTheme.typography.titleSmall,
+            color = Nocturne.Neutral300
+        )
+        Text(
+            text = "The skin analysis didn't come back, so there's nothing to pick from " +
+                "today's skin yet.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Nocturne.Neutral600
+        )
+        OutlinedButton(onClick = onRetry) {
+            Text("Try that selfie again", color = Nocturne.Text)
+        }
+    }
+}
+
 /**
  * Another outfit, on demand.
  *

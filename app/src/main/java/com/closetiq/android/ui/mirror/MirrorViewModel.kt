@@ -96,10 +96,11 @@ class MirrorViewModel(
             val garments = wardrobe.observeActiveGarments().first()
             val photos = profile.photos()
 
-            // Scoring is local and free, so it runs on every refresh whether or not
-            // there is a skin reading. The app is useful without a selfie; it is just
-            // sharper with one.
-            val pick = runCatching { getTodaysPick(garments, reading) }
+            // Nothing is suggested until YouCam has answered. Scoring itself works without
+            // a reading — it falls back to a neutral palette — but a pick that appears the
+            // moment the photo lands and then rearranges itself when the analysis returns
+            // reads as the app guessing first and checking afterwards. It waits instead.
+            val pick = reading?.let { runCatching { getTodaysPick(garments, it) } }
 
             _state.update {
                 it.copy(
@@ -107,8 +108,8 @@ class MirrorViewModel(
                     photos = photos,
                     reading = reading,
                     readingIsFresh = reading != null,
-                    pick = pick.getOrNull(),
-                    error = pick.exceptionOrNull()?.let(::describe)
+                    pick = pick?.getOrNull(),
+                    error = pick?.exceptionOrNull()?.let(::describe)
                 )
             }
         }
@@ -132,10 +133,8 @@ class MirrorViewModel(
 
             profile.setPhoto(slot, path)
 
-            // Reflected in state the moment it is on disk, not only once the reading lands.
-            // The pick is gated on the selfie, and a failed Skin Analysis call does not
-            // refresh — without this, a failed reading would hide the pick behind a photo
-            // the user had already given.
+            // The photo shows straight away — the card is the one thing that should react
+            // to the tap. What waits is the pick, which needs the analysis under it.
             _state.update { it.copy(photos = it.photos.with(slot, path)) }
 
             if (slot != PhotoSlot.SELFIE) {
@@ -150,7 +149,10 @@ class MirrorViewModel(
                     refresh()
                 }
                 .onFailure { error ->
-                    _state.update { it.copy(analysing = false, error = describe(error)) }
+                    _state.update {
+                        it.copy(analysing = false, reading = null, pick = null,
+                                error = describe(error))
+                    }
                 }
         }
     }
